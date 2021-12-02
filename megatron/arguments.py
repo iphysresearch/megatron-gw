@@ -614,7 +614,8 @@ def _add_validation_args(parser):
 
 def _add_data_args(parser):
     group = parser.add_argument_group(title='data and dataloader')
-
+    group.add_argument('--segment-length', type=int, default=2048,
+                       help='Length of signal patch.')
     group.add_argument('--data-path', nargs='*', default=None,
                        help='Path to the training dataset. Accepted format:'
                        '1) a single data path, 2) multiple datasets in the'

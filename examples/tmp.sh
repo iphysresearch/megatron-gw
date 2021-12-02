@@ -27,6 +27,7 @@ python -m torch.distributed.launch $DISTRIBUTED_ARGS \
        --num-attention-heads 32 \
        --micro-batch-size 8 \
        --global-batch-size 64 \
+       --segment-length 2048 \
        --seq-length 31 \
        --max-position-embeddings 31 \
        --train-iters 200000 \
@@ -49,6 +50,7 @@ python -m torch.distributed.launch $DISTRIBUTED_ARGS \
        --eval-interval 1000 \
        --eval-iters 10 \
        --dataloader-type cyclic \
-       --fp16
+       --fp16 \
+       --bert-no-binary-head
 #       --global-batch-size 32 \
 #       --num-layers-per-virtual-pipeline-stage 3 \

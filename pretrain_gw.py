@@ -36,7 +36,7 @@ def model_provider(pre_process=True, post_process=True):
     print_rank_0('building BERT model ...')
 
     args = get_args()
-    num_tokentypes = 2 if args.bert_binary_head else 0
+    num_tokentypes = 15 if args.bert_binary_head else 0
 #    model = BertModel(
 #        num_tokentypes=num_tokentypes,
 #        add_binary_head=args.bert_binary_head,
@@ -46,10 +46,11 @@ def model_provider(pre_process=True, post_process=True):
 
     model = BertModel(
         num_tokentypes=num_tokentypes,
-        add_binary_head=False,
+        add_binary_head=args.bert_binary_head,
         parallel_output=False,
         pre_process=pre_process,
         post_process=post_process)
+
     return model
 
 

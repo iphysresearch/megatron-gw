@@ -26,8 +26,9 @@ python -m torch.distributed.launch $DISTRIBUTED_ARGS \
        --hidden-size 2048 \
        --num-attention-heads 32 \
        --micro-batch-size 8 \
-       --seq-length 512 \
-       --max-position-embeddings 512 \
+       --seq-length 31 \
+       --max-position-embeddings 31 \
+       --segment-length 2048 \
        --train-iters 100000 \
        --save $CHECKPOINT_PATH \
        --load $CHECKPOINT_PATH \
@@ -48,6 +49,7 @@ python -m torch.distributed.launch $DISTRIBUTED_ARGS \
        --eval-interval 1000 \
        --eval-iters 100 \
        --dataloader-type single \
-       --fp16
+       --fp16 \
+       --bert-no-binary-head
 #       --global-batch-size 32 \
 

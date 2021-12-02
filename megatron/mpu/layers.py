@@ -150,7 +150,6 @@ class VocabParallelEmbedding(torch.nn.Module):
         self.scale_grad_by_freq = False
         self.sparse = False
         self._weight = None
-        self.patlen = 2048
         self.tensor_model_parallel_size = get_tensor_model_parallel_world_size()
         # Divide the weight matrix along the vocaburaly dimension.
         self.vocab_start_index, self.vocab_end_index = \
@@ -158,7 +157,9 @@ class VocabParallelEmbedding(torch.nn.Module):
                 self.num_embeddings, get_tensor_model_parallel_rank(),
                 self.tensor_model_parallel_size)
         # self.num_embeddings_per_partition = self.vocab_end_index - self.vocab_start_index
-        self.patlen = 2048
+        args = get_args()
+        self.params_dtype = args.params_dtype
+        self.patlen = args.segment_length
         assert self.embedding_dim % self.tensor_model_parallel_size == 0, \
                     'expected embedding_dim divided by tensor-model-parallel-size.'
         self.num_embeddings_per_partition = int(self.embedding_dim / self.tensor_model_parallel_size)
