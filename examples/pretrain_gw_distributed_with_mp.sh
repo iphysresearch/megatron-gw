@@ -8,8 +8,8 @@ NNODES=1
 NODE_RANK=0
 WORLD_SIZE=$(($GPUS_PER_NODE*$NNODES))
 
-DATA_PATH=./bigdata/
-CHECKPOINT_PATH=verify1  #pretrain-bert
+DATA_PATH=./data-32/
+CHECKPOINT_PATH=ckpt  #pretrain-bert
 VOCAB_FILE=./bert_vocab_files/bert-base-uncased-vocab.txt
 
 DISTRIBUTED_ARGS="--nproc_per_node $GPUS_PER_NODE --nnodes $NNODES --node_rank $NODE_RANK --master_addr $MASTER_ADDR --master_port $MASTER_PORT"
@@ -28,8 +28,8 @@ python -m torch.distributed.launch $DISTRIBUTED_ARGS \
        --micro-batch-size 8 \
        --global-batch-size 64 \
        --segment-length 2048 \
-       --seq-length 31 \
-       --max-position-embeddings 31 \
+       --seq-length 32 \
+       --max-position-embeddings 32 \
        --train-iters 200000 \
        --save $CHECKPOINT_PATH \
        --load $CHECKPOINT_PATH \
@@ -48,7 +48,7 @@ python -m torch.distributed.launch $DISTRIBUTED_ARGS \
        --log-interval 100 \
        --save-interval 100000 \
        --eval-interval 1000 \
-       --eval-iters 10 \
+       --eval-iters 100 \
        --dataloader-type cyclic \
        --fp16 \
        --bert-no-binary-head

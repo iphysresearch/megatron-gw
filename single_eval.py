@@ -113,20 +113,21 @@ def forward_step(data_iterator, model):
     output_tensor = model(noisy_signal, padding_mask, tokentype_ids=types,
                           lm_labels=lm_labels)
 
-    import numpy as np
-    vis_denoised = output_tensor[0].cpu().numpy()
-    vis_noisy = noisy_signal.cpu().numpy()
-    vis_clean = clean_signal.cpu().numpy()
-    vis_all = np.append(vis_denoised, vis_noisy, axis=0)
-    vis_all = np.append(vis_all, vis_clean, axis=0)
-    from pathlib import Path
-    p = Path('./vis/')
-    p.mkdir(parents=True, exist_ok=True)
-    tmp_seed = args.consumed_valid_samples  #np.random.randint(10000)
-    data_fn = 'data-{}.npy'.format(tmp_seed)
-    param_fn = 'param-{}.npy'.format(tmp_seed)
-    np.save(p / data_fn, vis_all)
-    np.save(p / param_fn, params.cpu().numpy())
+    if len(output_tensor)==2:
+        import numpy as np
+        vis_denoised = output_tensor[0].cpu().numpy()
+        vis_noisy = noisy_signal.cpu().numpy()
+        vis_clean = clean_signal.cpu().numpy()
+        vis_all = np.append(vis_denoised, vis_noisy, axis=0)
+        vis_all = np.append(vis_all, vis_clean, axis=0)
+        from pathlib import Path
+        p = Path('./vis/')
+        p.mkdir(parents=True, exist_ok=True)
+        tmp_seed = args.consumed_valid_samples  #np.random.randint(10000)
+        data_fn = 'data-{}.npy'.format(tmp_seed)
+        param_fn = 'param-{}.npy'.format(tmp_seed)
+        np.save(p / data_fn, vis_all)
+        np.save(p / param_fn, params.cpu().numpy())
 
     # return output_tensor, partial(loss_func, loss_mask, sentence_order)
     return output_tensor, partial(loss_func, loss_mask, sentence_order, clean_signal)

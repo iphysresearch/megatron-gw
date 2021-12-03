@@ -75,9 +75,9 @@ def get_samples(data_prefix, name):
         f_data.close()
     else:
         dataset = {}
-        for i in range(1,11):
-            data_path = os.path.join(data_prefix, "{}-{}.hdf5".format(name, i))
-            #data_path = os.path.join(data_prefix, "{}.hdf5".format(name, i))
+        for i in range(1, 2): #11):
+            #data_path = os.path.join(data_prefix, "{}-{}.hdf5".format(name, i))
+            data_path = os.path.join(data_prefix, "{}.hdf5".format(name))
             f_data = h5py.File(data_path, 'r')
             if i == 1:
                 for data_name in ['noisy', 'clean']:

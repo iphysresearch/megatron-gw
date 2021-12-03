@@ -8,28 +8,29 @@ NNODES=1
 NODE_RANK=0
 WORLD_SIZE=$(($GPUS_PER_NODE*$NNODES))
 
-DATA_PATH=./bigdata/ #./gwdata/
-CHECKPOINT_PATH=./dis105-713-10k/dtp  #gwdmp  #pretrain-bert
+DATA_PATH=./data-32/ #./gwdata/
+CHECKPOINT_PATH=ckpt  #gwdmp  #pretrain-bert
 VOCAB_FILE=./bert_vocab_files/bert-base-uncased-vocab.txt
 
 DISTRIBUTED_ARGS="--nproc_per_node $GPUS_PER_NODE --nnodes $NNODES --node_rank $NODE_RANK --master_addr $MASTER_ADDR --master_port $MASTER_PORT"
 
-export OMP_NUM_THREADS=12
+#export OMP_NUM_THREADS=12
 #export NCCL_DEBUG=INFO
 # CUDA_LAUNCH_BLOCKING=1 
 #export CUDA_VISIBLE_DEVICES=1,2,3,4
 python -m torch.distributed.launch $DISTRIBUTED_ARGS \
        single_eval.py \
        --tensor-model-parallel-size 2 \
-       --pipeline-model-parallel-size 1 \
+       --pipeline-model-parallel-size 2 \
        --num-layers 24 \
        --hidden-size 2048 \
        --num-attention-heads 32 \
        --micro-batch-size 8 \
-       --seq-length 31 \
-       --max-position-embeddings 31 \
+       --global-batch-size 64 \
+       --seq-length 32 \
+       --max-position-embeddings 32 \
        --segment-length 2048 \
-       --train-iters 100000 \
+       --train-iters 200000 \
        --save $CHECKPOINT_PATH \
        --load $CHECKPOINT_PATH \
        --data-path $DATA_PATH \
