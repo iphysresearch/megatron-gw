@@ -10,7 +10,6 @@ WORLD_SIZE=$(($GPUS_PER_NODE*$NNODES))
 
 DATA_PATH=./data-32/ #./gwdata/
 CHECKPOINT_PATH=ckpt  #gwdmp  #pretrain-bert
-VOCAB_FILE=./bert_vocab_files/bert-base-uncased-vocab.txt
 
 DISTRIBUTED_ARGS="--nproc_per_node $GPUS_PER_NODE --nnodes $NNODES --node_rank $NODE_RANK --master_addr $MASTER_ADDR --master_port $MASTER_PORT"
 
@@ -34,7 +33,6 @@ python -m torch.distributed.launch $DISTRIBUTED_ARGS \
        --save $CHECKPOINT_PATH \
        --load $CHECKPOINT_PATH \
        --data-path $DATA_PATH \
-       --vocab-file $VOCAB_FILE \
        --data-impl mmap \
        --split 949,50,1 \
        --distributed-backend nccl \

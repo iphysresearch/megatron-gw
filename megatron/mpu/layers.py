@@ -152,10 +152,10 @@ class VocabParallelEmbedding(torch.nn.Module):
         self._weight = None
         self.tensor_model_parallel_size = get_tensor_model_parallel_world_size()
         # Divide the weight matrix along the vocaburaly dimension.
-        self.vocab_start_index, self.vocab_end_index = \
-            VocabUtility.vocab_range_from_global_vocab_size(
-                self.num_embeddings, get_tensor_model_parallel_rank(),
-                self.tensor_model_parallel_size)
+        # self.vocab_start_index, self.vocab_end_index = \
+        #     VocabUtility.vocab_range_from_global_vocab_size(
+        #         self.num_embeddings, get_tensor_model_parallel_rank(),
+        #         self.tensor_model_parallel_size)
         # self.num_embeddings_per_partition = self.vocab_end_index - self.vocab_start_index
         args = get_args()
         self.params_dtype = args.params_dtype
