@@ -98,13 +98,13 @@ def _compile_dependencies():
     # Compile dataset C++ code.
     # =========================
     # TODO: move this to ninja
-    if torch.distributed.get_rank() == 0:
-        start_time = time.time()
-        print('> compiling dataset index builder ...')
-        from megatron.data.dataset_utils import compile_helper
-        compile_helper()
-        print('>>> done with dataset index builder. Compilation time: {:.3f} '
-              'seconds'.format(time.time() - start_time), flush=True)
+    # if torch.distributed.get_rank() == 0:
+    #     start_time = time.time()
+    #     print('> compiling dataset index builder ...')
+    #     from megatron.data.dataset_utils import compile_helper
+    #     compile_helper()
+    #     print('>>> done with dataset index builder. Compilation time: {:.3f} '
+    #           'seconds'.format(time.time() - start_time), flush=True)
 
     # ==================
     # Load fused kernels
