@@ -124,8 +124,9 @@ def forward_step(data_iterator, model):
         p = Path('./vis/')
         p.mkdir(parents=True, exist_ok=True)
         tmp_seed = args.consumed_valid_samples  #np.random.randint(10000)
-        data_fn = 'data-{}.npy'.format(tmp_seed)
-        param_fn = 'param-{}.npy'.format(tmp_seed)
+        dprank = torch.distributed.get_rank()
+        data_fn = 'data-{}-{}.npy'.format(dprank, tmp_seed)
+        param_fn = 'param-{}-{}.npy'.format(dprank, tmp_seed)
         np.save(p / data_fn, vis_all)
         np.save(p / param_fn, params.cpu().numpy())
 
