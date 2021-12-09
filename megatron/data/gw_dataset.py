@@ -44,8 +44,6 @@ class GwDataset(torch.utils.data.Dataset):
         self.duration = 8
         self.patches = int((self.duration - self.seg) // self.step) + 1
         self.step_samples = int(self.seg * self.fs)
-        self.noisy_input = np.zeros([self.patches, self.step_samples], dtype=self.noisy.dtype)
-        self.clean_input = np.zeros([self.patches, self.step_samples], dtype=self.clean.dtype)
 
     def __len__(self):
         return self.noisy.shape[0]
@@ -55,14 +53,16 @@ class GwDataset(torch.utils.data.Dataset):
         noisy_np = self.noisy[tmp_idx]
         clean_np = self.clean[tmp_idx]
         param_np = np.real(self.params[tmp_idx])
+        noisy_input = np.zeros([self.patches, self.step_samples], dtype=self.noisy.dtype)
+        clean_input = np.zeros([self.patches, self.step_samples], dtype=self.clean.dtype)
         for ind in range(self.patches):
             start = int(ind * self.step * self.fs)
-            self.noisy_input[ind] = noisy_np[0, start:start + self.step_samples]
-            self.clean_input[ind] = clean_np[0, start:start + self.step_samples]
+            noisy_input[ind] = noisy_np[0, start:start + self.step_samples]
+            clean_input[ind] = clean_np[0, start:start + self.step_samples]
         
         train_sample = {
-            'noisy_signal': self.noisy_input,
-            'clean_signal': self.clean_input,
+            'noisy_signal': noisy_input,
+            'clean_signal': clean_input,
             'params': param_np}
 
         return train_sample
