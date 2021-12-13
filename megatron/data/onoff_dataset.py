@@ -77,7 +77,7 @@ class OnsourceDataset(torch.utils.data.Dataset):
         self.ifo = 'H1'
 
         # GW151012 GW151226 GW150914
-        self.target_time = self.GWTC1_events['GW150914']['trigger-time'] 
+        self.target_time = self.GWTC1_events['GW150914']['trigger-time']
         self.PSD_strain, _, _, _ = getstrain_cvmfs(self.target_time - 6  -1024, self.target_time - 6 , self.ifo, self.filelist)
         self.seg_sec = 0.1
         self.freq, self.Pxx = scipy.signal.welch(self.PSD_strain, fs=self.sampling_frequency,
@@ -103,21 +103,20 @@ class OnsourceDataset(torch.utils.data.Dataset):
         whiten_freq_domain_strain = freq_domain_strain / self.wfd.dets['H1'].amplitude_spectral_density_array
         whiten_time_domain_strain = utils.infft(whiten_freq_domain_strain, self.sampling_frequency)
 
-        noisy_input = np.zeros([self.patches, self.step_samples], dtype=self.noisy.dtype)
-        clean_input = np.zeros([self.patches, self.step_samples], dtype=self.clean.dtype)
-        
+        noisy_input = np.zeros([self.patches, self.step_samples], dtype=whiten_time_domain_strain.dtype)
+        clean_input = np.zeros([self.patches, self.step_samples], dtype=whiten_time_domain_strain.dtype)
+
         for ind in range(self.patches):
             start_idx = int(ind * self.step * self.sampling_frequency)
             noisy_input[ind] = whiten_time_domain_strain[start_idx:start_idx + self.step_samples]
             #clean_input[ind] = clean_np[0, start_idx:start_idx + self.step_samples]
-        
+        # print("========", start_time)
         train_sample = {
             'noisy_signal': noisy_input,
             'clean_signal': clean_input,
             'params': np.array(start_time)}
 
         return train_sample
-
 
 class OffsourceDataset(torch.utils.data.Dataset):
 
@@ -156,10 +155,10 @@ class OffsourceDataset(torch.utils.data.Dataset):
         self.data_dir = '/workspace/zhaoty/dataset/O1_H1_All'
         self.wfd.dets['H1'].load_from_GWOSC(data_dir, duration, selected_hdf_file_ratio=0)
 
-        self.wfd.dets['H1'].update_time_domain_strain_from_GWOSC(seg_sec=2)   
-        self.noise = wfd.dets['H1'].time_domain_whitened_strain
+        self.wfd.dets['H1'].update_time_domain_strain_from_GWOSC(seg_sec=2)
+        self.noise = self.wfd.dets['H1'].time_domain_whitened_strain
         self.target_optimal_snr = 20
-        self.target_optimal_snr /= self.wfd.dets['H1'].optimal_snr(self.wfd.frequency_waveform_response[0] )
+        self.alpha = 1
 
     def __getitem__(self, idx):
         # This should be a barrier but nccl barrier assumes
@@ -179,16 +178,17 @@ class OffsourceDataset(torch.utils.data.Dataset):
 
         self.external_parameters = {k: self.wfd.parameters[k][0] for k in self.wfd._external_parameters}
         temp = self.wfd.dets['H1']
-        signal, time_array = temp.frequency_to_time_domain(temp.whiten(self.target_optimal_snr * temp.get_detector_response(self.wfd.frequency_waveform_polarizations, self.external_parameters)))
+        self.alpha = self.target_optimal_snr / self.wfd.dets['H1'].optimal_snr(self.wfd.frequency_waveform_response[0] )
+        signal, time_array = temp.frequency_to_time_domain(temp.whiten(self.alpha * temp.get_detector_response(self.wfd.frequency_waveform_polarizations, self.external_parameters)))
         data = signal + self.noise
-        noisy_input = np.zeros([self.patches, self.step_samples], dtype=self.noisy.dtype)
-        clean_input = np.zeros([self.patches, self.step_samples], dtype=self.clean.dtype)
-        
+        noisy_input = np.zeros([self.patches, self.step_samples], dtype=self.noise.dtype)
+        clean_input = np.zeros([self.patches, self.step_samples], dtype=self.noise.dtype)
+
         for ind in range(self.patches):
             start_idx = int(ind * self.step * self.sampling_frequency)
             noisy_input[ind] = data[start_idx:start_idx + self.step_samples]
             clean_input[ind] = signal[start_idx:start_idx + self.step_samples]
-        
+
         train_sample = {
             'noisy_signal': noisy_input,
             'clean_signal': clean_input,
