@@ -26,7 +26,9 @@ from megatron import get_timers
 from megatron import mpu
 from megatron.model import BertModel
 from megatron.utils import average_losses_across_data_parallel_group
-
+from pathlib import Path
+import os
+import numpy as np
 
 def model_provider(pre_process=True, post_process=True):
     """Build the model."""
@@ -110,34 +112,29 @@ def forward_step(data_iterator, model):
         types = None
 
     # Forward pass through the model.
+
     output_tensor = model(noisy_signal, padding_mask, tokentype_ids=types,
                           lm_labels=lm_labels)
-
     if len(output_tensor)==2:
-        import numpy as np
         vis_denoised = output_tensor[0].cpu().numpy()
         vis_noisy = noisy_signal.cpu().numpy()
         start_time = params.cpu().numpy()
-        print(vis_noisy.shape)
-        print(start_time.shape)
         vis_all = np.append(vis_denoised, vis_noisy, axis=0)
-        print(vis_all.shape)
-        # from pathlib import Path
-        # folder = os.path.join('valid','{}_{}'.format(args.load.strip('/'), args.iteration))
-        # p = Path(folder)
-        # p.mkdir(parents=True, exist_ok=True)
-        # tmp_seed = args.consumed_valid_samples  #np.random.randint(10000)
-        # dprank = torch.distributed.get_rank()
-        # data_fn = 'data-{}-{}.npy'.format(dprank, tmp_seed)
-        # param_fn = 'param-{}-{}.npy'.format(dprank, tmp_seed)
-        # np.save(p / data_fn, vis_all)
-        # np.save(p / param_fn, params.cpu().numpy())
+        folder = os.path.join('onsource','{}_{}'.format(args.load.strip('/'), args.iteration))
+        p = Path(folder)
+        p.mkdir(parents=True, exist_ok=True)
+        tmp_seed = args.consumed_valid_samples  #np.random.randint(10000)
+        dprank = torch.distributed.get_rank()
+        data_fn = 'data-{}-{}.npy'.format(dprank, tmp_seed)
+        param_fn = 'param-{}-{}.npy'.format(dprank, tmp_seed)
+        np.save(p / data_fn, vis_all)
+        np.save(p / param_fn, params.cpu().numpy())
 
     # return output_tensor, partial(loss_func, loss_mask, sentence_order)
-    return None
+    return output_tensor, partial(loss_func, loss_mask, sentence_order, noisy_signal)
 
-def build_dataset(name, data_prefix, seed):
-    from megatron.data.onff_dataset import OnsourceDataset
+def build_dataset(data_prefix, seed):
+    from megatron.data.onoff_dataset import OnsourceDataset
     dataset = OnsourceDataset(
                 data_prefix=data_prefix[0],
                 seed=seed)
@@ -175,6 +172,8 @@ def evaluate(forward_step_func, data_iterator, model, verbose=False):
     for model_module in model:
         model_module.eval()
 
+    total_loss_dict = {}
+
     with torch.no_grad():
         iteration = 0
         args.consumed_valid_samples = 0
@@ -189,14 +188,25 @@ def evaluate(forward_step_func, data_iterator, model, verbose=False):
                 forward_step_func, data_iterator, model, optimizer=None,
                 timers=None, forward_only=True)
 
+            if mpu.is_pipeline_last_stage(ignore_virtual=True):
+                # Reduce across processes.
+                for loss_dict in loss_dicts:
+                    for key in loss_dict:
+                        total_loss_dict[key] = total_loss_dict.get(
+                            key, torch.cuda.FloatTensor([0.0])) + loss_dict[key]
+
             args.consumed_valid_samples += mpu.get_data_parallel_world_size() \
                                            * args.micro_batch_size \
                                            * get_num_microbatches()
+
     # Move model back to the train mode.
     for model_module in model:
         model_module.train()
 
-    return None
+    for key in total_loss_dict:
+        total_loss_dict[key] /= args.eval_iters * get_num_microbatches()
+
+    return total_loss_dict
 
 def evaluate_and_print_results(prefix, forward_step_func,
                                data_iterator, model,
@@ -350,3 +360,4 @@ if __name__ == "__main__":
 
     test(test_datasets_provider, model_provider, forward_step,
              args_defaults={'tokenizer_type': 'BertWordPieceLowerCase'})
+

@@ -1,0 +1,53 @@
+# To use:
+#   $ conda env create -f environment.yml
+
+name: gwtoolkit
+channels:
+  - conda-forge
+dependencies:
+  - python=3.8
+  - cython
+  - compilers
+  - pybind11 # Seamless operability between C++11 and Python
+  - pythran>=0.9.11 # Python语言子集的前置编译器
+  - conda-build  # to allow `conda develop .`
+  - pip
+  - h5py
+  - jupyterlab
+  - ipython  
+  - tqdm
+  - pyyaml
+  # For testing and benchmarking
+  - pytest
+  - pytest-cov
+  - codecov
+  # For type annotations
+  - mypy
+  - typing_extensions
+  - pylint
+  # For data science and plot
+  - numpy
+  - pandas
+  - scipy
+  - scikit-learn
+  - matplotlib
+  - corner
+  # PyTorch
+  - pytorch::pytorch
+  - pytorch::torchvision
+  # For astronomy
+  - lalsuite
+  - pycbc
+  - ligo.skymap
+  - bilby
+  - astropy
+  - gwpy
+  - gwsurrogate
+  - pip:
+    - jupyterlab-unfold
+    - jupyterlab_nvdashboard
+    - torchsummary
+    # - -e .  # install package in development mode
+    - einops
+    - simple-parsing  
+    - ray[default]  # a simple, universal API for building distributed applications.

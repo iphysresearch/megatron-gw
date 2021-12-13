@@ -24,22 +24,24 @@ from megatron import (
     print_rank_0
 )
 import sys
-sys.path.append('../../GWToolkit')
-from gwtoolkit.gw import WaveformDataset
-from gwtoolkit.torch import (WaveformDatasetTorch, Normalize_params, Patching_data, ToTensor)
+# sys.path.append('../../GWToolkit')
+from GWToolkit.gwtoolkit.gw import WaveformDataset
+from GWToolkit.gwtoolkit.torch import (WaveformDatasetTorch, Normalize_params, Patching_data, ToTensor)
 from torchvision import transforms
 from torch.utils.data import DataLoader
 import itertools
-from gwtoolkit.gw.gwosc_cvmfs import getstrain_cvmfs, FileList
-from gwtoolkit.utils import pickle_read
+from GWToolkit.gwtoolkit.gw.gwosc_cvmfs import getstrain_cvmfs, FileList
+from GWToolkit.gwtoolkit.utils import pickle_read
 import scipy.signal
 from bilby.core import utils
+from torchvision.transforms import Normalize
 
 
 class OnsourceDataset(torch.utils.data.Dataset):
 
     def __init__(self, data_prefix, seed=1234):
-
+        self.data_prefix = data_prefix
+        self.seed = seed
         self.sampling_frequency = 4096
         self.seg = 0.5
         self.step = 0.25
@@ -57,7 +59,7 @@ class OnsourceDataset(torch.utils.data.Dataset):
         self.base = 'bilby'
         self.dets = ['H1', 'L1'][:1]
 
-        self.filename = '../../GWToolkit/tests/gw/demo.prior'   # default prior file
+        self.filename = 'GWToolkit/tests/gw/demo.prior'   # default prior file
 
         # waveform dataset
         self.wfd = WaveformDataset(sampling_frequency=self.sampling_frequency,
@@ -77,23 +79,27 @@ class OnsourceDataset(torch.utils.data.Dataset):
         self.ifo = 'H1'
 
         # GW151012 GW151226 GW150914
-        self.target_time = self.GWTC1_events['GW150914']['trigger-time']
+        self.target_time = self.GWTC1_events['GW150914']['trigger-time'] 
         self.PSD_strain, _, _, _ = getstrain_cvmfs(self.target_time - 6  -1024, self.target_time - 6 , self.ifo, self.filelist)
         self.seg_sec = 0.1
         self.freq, self.Pxx = scipy.signal.welch(self.PSD_strain, fs=self.sampling_frequency,
                                     nperseg=self.seg_sec*self.sampling_frequency, )
+        self.TT = ToTensor()
+        # self.update()
+
+    def __len__(self):
+        return self.duration * 10000
 
     def __getitem__(self, idx):
         # This should be a barrier but nccl barrier assumes
         # device_index=rank which is not the case for model
         # parallel case
-        counts = torch.cuda.LongTensor([1])
-        torch.distributed.all_reduce(counts, group=mpu.get_data_parallel_group())
-        torch.distributed.all_reduce(counts, group=mpu.get_pipeline_model_parallel_group())
-        assert counts[0].item() == (
-            torch.distributed.get_world_size() //
-            torch.distributed.get_world_size(group=mpu.get_tensor_model_parallel_group()))
-
+        #counts = torch.cuda.LongTensor([1])
+        #torch.distributed.all_reduce(counts, group=mpu.get_data_parallel_group())
+        #torch.distributed.all_reduce(counts, group=mpu.get_pipeline_model_parallel_group())
+        #assert counts[0].item() == (
+        #    torch.distributed.get_world_size() //
+        #    torch.distributed.get_world_size(group=mpu.get_tensor_model_parallel_group()))
         self.wfd.dets['H1'].ifo.power_spectral_density = self.wfd.dets['H1'].ifo.power_spectral_density.from_power_spectral_density_array(self.freq, self.Pxx)
         start_time = self.target_time - idx * 0.5 + 50        # step=0.5, -200 +50
         strain, time, dqmask, injmask = getstrain_cvmfs(start_time, start_time+self.duration, self.ifo, self.filelist)
@@ -105,23 +111,55 @@ class OnsourceDataset(torch.utils.data.Dataset):
 
         noisy_input = np.zeros([self.patches, self.step_samples], dtype=whiten_time_domain_strain.dtype)
         clean_input = np.zeros([self.patches, self.step_samples], dtype=whiten_time_domain_strain.dtype)
+        norm = Normalize(mean=(0,), std=(whiten_time_domain_strain.std(),))  # specify ~45.6 for std=1
+        whiten_time_domain_strain = norm(self.TT(whiten_time_domain_strain[np.newaxis, np.newaxis, ...]))[0, 0].numpy()
 
         for ind in range(self.patches):
             start_idx = int(ind * self.step * self.sampling_frequency)
             noisy_input[ind] = whiten_time_domain_strain[start_idx:start_idx + self.step_samples]
             #clean_input[ind] = clean_np[0, start_idx:start_idx + self.step_samples]
-        # print("========", start_time)
+
+        params = np.reshape(np.array(start_time, dtype='float64'), [1, -1])
         train_sample = {
             'noisy_signal': noisy_input,
             'clean_signal': clean_input,
-            'params': np.array(start_time)}
-
+            'params': params}
         return train_sample
+        # return self.data[idx]
+
+    def update(self):
+        self.data = []
+        for idx in range(300):
+            self.wfd.dets['H1'].ifo.power_spectral_density = self.wfd.dets['H1'].ifo.power_spectral_density.from_power_spectral_density_array(self.freq, self.Pxx)
+            start_time = self.target_time - idx * 0.5 + 50        # step=0.5, -200 +50
+            strain, time, dqmask, injmask = getstrain_cvmfs(start_time, start_time+self.duration, self.ifo, self.filelist)
+            strain = strain[::4]
+            time = time[::4]
+            freq_domain_strain, freq = self.wfd.dets['H1'].time_to_frequency_domain(strain)
+            whiten_freq_domain_strain = freq_domain_strain / self.wfd.dets['H1'].amplitude_spectral_density_array
+            whiten_time_domain_strain = utils.infft(whiten_freq_domain_strain, self.sampling_frequency)
+
+            noisy_input = np.zeros([self.patches, self.step_samples], dtype=whiten_time_domain_strain.dtype)
+            clean_input = np.zeros([self.patches, self.step_samples], dtype=whiten_time_domain_strain.dtype)
+            norm = Normalize(mean=(0,), std=(whiten_time_domain_strain.std(),))  # specify ~45.6 for std=1
+            whiten_time_domain_strain = norm(self.TT(whiten_time_domain_strain[np.newaxis, np.newaxis, ...]))[0, 0].numpy()
+
+            for ind in range(self.patches):
+                start_idx = int(ind * self.step * self.sampling_frequency)
+                noisy_input[ind] = whiten_time_domain_strain[start_idx:start_idx + self.step_samples]
+                #clean_input[ind] = clean_np[0, start_idx:start_idx + self.step_samples]
+
+            params = np.reshape(np.array(start_time, dtype='float64'), [1, -1])
+            train_sample = {
+                'noisy_signal': noisy_input,
+                'clean_signal': clean_input,
+                'params': params}
+            
+            self.data.append(train_sample)
 
 class OffsourceDataset(torch.utils.data.Dataset):
 
-    def __init__(self, data_prefix, seed=1234):
-
+    def __init__(self, name, data_prefix, seed=1234):
         self.sampling_frequency = 4096
         self.seg = 0.5
         self.step = 0.25
@@ -139,7 +177,7 @@ class OffsourceDataset(torch.utils.data.Dataset):
         self.base = 'bilby'
         self.dets = ['H1', 'L1'][:1]
 
-        self.filename = '../../GWToolkit/tests/gw/demo.prior'   # default prior file
+        self.filename = 'GWToolkit/tests/gw/demo.prior'   # default prior file
 
         # waveform dataset
         self.wfd = WaveformDataset(sampling_frequency=self.sampling_frequency,
@@ -153,23 +191,31 @@ class OffsourceDataset(torch.utils.data.Dataset):
             waveform_arguments=self.waveform_arguments)
 
         self.data_dir = '/workspace/zhaoty/dataset/O1_H1_All'
-        self.wfd.dets['H1'].load_from_GWOSC(data_dir, duration, selected_hdf_file_ratio=0)
+        self.wfd.dets['H1'].load_from_GWOSC(self.data_dir, self.duration, selected_hdf_file_ratio=0)
 
         self.wfd.dets['H1'].update_time_domain_strain_from_GWOSC(seg_sec=2)
         self.noise = self.wfd.dets['H1'].time_domain_whitened_strain
-        self.target_optimal_snr = 20
+
+        self.TT = ToTensor()
+        self.norm = Normalize(mean=(0,), std=(self.noise.std(),))  # specify ~45.6 for std=1
+        self.noise = self.norm(self.TT(self.noise[np.newaxis, np.newaxis, ...]))[0, 0].numpy()
+
+        self.target_optimal_snr = 40
         self.alpha = 1
+    
+    def __len__(self):
+        return self.duration * 10000
 
     def __getitem__(self, idx):
         # This should be a barrier but nccl barrier assumes
         # device_index=rank which is not the case for model
         # parallel case
-        counts = torch.cuda.LongTensor([1])
-        torch.distributed.all_reduce(counts, group=mpu.get_data_parallel_group())
-        torch.distributed.all_reduce(counts, group=mpu.get_pipeline_model_parallel_group())
-        assert counts[0].item() == (
-            torch.distributed.get_world_size() //
-            torch.distributed.get_world_size(group=mpu.get_tensor_model_parallel_group()))
+        #counts = torch.cuda.LongTensor([1])
+        #torch.distributed.all_reduce(counts, group=mpu.get_data_parallel_group())
+        #torch.distributed.all_reduce(counts, group=mpu.get_pipeline_model_parallel_group())
+        #assert counts[0].item() == (
+        #    torch.distributed.get_world_size() //
+        #    torch.distributed.get_world_size(group=mpu.get_tensor_model_parallel_group()))
 
         self.wfd._update_waveform()
         self.start_time = self.wfd.dets['H1'].gwosc.start
@@ -180,18 +226,25 @@ class OffsourceDataset(torch.utils.data.Dataset):
         temp = self.wfd.dets['H1']
         self.alpha = self.target_optimal_snr / self.wfd.dets['H1'].optimal_snr(self.wfd.frequency_waveform_response[0] )
         signal, time_array = temp.frequency_to_time_domain(temp.whiten(self.alpha * temp.get_detector_response(self.wfd.frequency_waveform_polarizations, self.external_parameters)))
-        data = signal + self.noise
-        noisy_input = np.zeros([self.patches, self.step_samples], dtype=self.noise.dtype)
-        clean_input = np.zeros([self.patches, self.step_samples], dtype=self.noise.dtype)
+
+        signal = self.norm(self.TT(signal[np.newaxis, np.newaxis, ...]))[0, 0].numpy()
+        noisy = signal + self.noise
+        noisy_input = np.zeros([self.patches, self.step_samples], dtype=noisy.dtype)
+        clean_input = np.zeros([self.patches, self.step_samples], dtype=signal.dtype)
 
         for ind in range(self.patches):
             start_idx = int(ind * self.step * self.sampling_frequency)
-            noisy_input[ind] = data[start_idx:start_idx + self.step_samples]
+            noisy_input[ind] = noisy[start_idx:start_idx + self.step_samples]
             clean_input[ind] = signal[start_idx:start_idx + self.step_samples]
+
+        params = np.array([],dtype='float64')
+        for key in self.wfd.parameters.keys():
+            params = np.append(params, self.wfd.parameters[key])
+        params = np.reshape(params, [1, -1])
 
         train_sample = {
             'noisy_signal': noisy_input,
             'clean_signal': clean_input,
-            'params': np.array(ind)}
+            'params': params}
 
         return train_sample

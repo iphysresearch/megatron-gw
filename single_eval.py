@@ -121,7 +121,9 @@ def forward_step(data_iterator, model):
         vis_all = np.append(vis_denoised, vis_noisy, axis=0)
         vis_all = np.append(vis_all, vis_clean, axis=0)
         from pathlib import Path
-        p = Path('./vis/')
+        import os
+        folder = os.path.join('valid','{}_{}'.format(args.load.strip('/'), args.iteration))
+        p = Path(folder)
         p.mkdir(parents=True, exist_ok=True)
         tmp_seed = args.consumed_valid_samples  #np.random.randint(10000)
         dprank = torch.distributed.get_rank()
@@ -129,6 +131,7 @@ def forward_step(data_iterator, model):
         param_fn = 'param-{}-{}.npy'.format(dprank, tmp_seed)
         np.save(p / data_fn, vis_all)
         np.save(p / param_fn, params.cpu().numpy())
+
 
     # return output_tensor, partial(loss_func, loss_mask, sentence_order)
     return output_tensor, partial(loss_func, loss_mask, sentence_order, clean_signal)
