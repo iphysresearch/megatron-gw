@@ -80,7 +80,7 @@ class OnsourceDataset(torch.utils.data.Dataset):
 
         # GW151012 GW151226 GW150914
         self.target_time = self.GWTC1_events['GW150914']['trigger-time'] 
-        self.PSD_strain, _, _, _ = getstrain_cvmfs(self.target_time - 6  -1024, self.target_time - 6 , self.ifo, self.filelist)
+        self.PSD_strain, _, _, _ = getstrain_cvmfs(self.target_time + 2, self.target_time + 2 + 1024 , self.ifo, self.filelist)
         self.seg_sec = 0.1
         self.freq, self.Pxx = scipy.signal.welch(self.PSD_strain, fs=self.sampling_frequency,
                                     nperseg=self.seg_sec*self.sampling_frequency, )
