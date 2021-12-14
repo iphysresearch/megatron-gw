@@ -49,6 +49,7 @@ python -m torch.distributed.launch $DISTRIBUTED_ARGS \
        --eval-iters 100 \
        --dataloader-type single \
        --fp16 \
-       --bert-no-binary-head
+       --bert-no-binary-head \
+       --no-load-optim
 #       --global-batch-size 32 \
 
