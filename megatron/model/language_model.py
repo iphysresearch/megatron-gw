@@ -167,6 +167,13 @@ class Embedding(MegatronModule):
         self._conv_embeddings_key = 'conv_embeddings'
         # Initialize the position embeddings.
         self.init_method(self.conv_embeddings.weight)
+
+        # Conv layer (serial), for 2D feature extraction
+        # TODO: parallel computing
+        self.conv_layer = torch.nn.Conv2d(1, 1, 7, stride=1, padding=3,dtype=args.params_dtype)
+        self._conv_layer_key = 'conv_layer'
+        # Initialize the position embeddings.
+        self.init_method(self.conv_layer.weight)
 #
 #        # Token type embedding.
 #        # Add this as an optional field that can be added through
@@ -183,6 +190,8 @@ class Embedding(MegatronModule):
 #
         # Embeddings dropout
         self.embedding_dropout = torch.nn.Dropout(embedding_dropout_prob)
+        # Embeddings activation
+        self.embedding_activation = torch.nn.GELU()
 
     def add_tokentype_embeddings(self, num_tokentypes):
         """Add token-type embedding. This function is provided so we can add
@@ -206,19 +215,23 @@ class Embedding(MegatronModule):
         words_embeddings = self.word_embeddings(input_ids)
         position_embeddings = self.position_embeddings(position_ids)
         conv_embeddings = self.conv_embeddings(input_ids.to(self.conv_embeddings.weight.dtype))
+        conv_embeddings = self.embedding_activation(conv_embeddings)
         embeddings = words_embeddings + position_embeddings + conv_embeddings
+
+        conv_output = self.conv_layer(embeddings.unsqueeze(1)).squeeze(1)
+        conv_output = self.embedding_activation(conv_output)
 
 #        if tokentype_ids is not None:
 #            assert self.tokentype_embeddings is not None
 #            embeddings = embeddings + self.tokentype_embeddings(tokentype_ids)
 #        else:
 #            assert self.tokentype_embeddings is None
-#
+        # residual block
+        embeddings_output = embeddings + conv_output
         # Dropout.
-        embeddings = self.embedding_dropout(embeddings)
+        embeddings_output = self.embedding_dropout(embeddings_output)
 
-        # embeddings = self.embedding_dropout(words_embeddings)
-        return embeddings
+        return embeddings_output
 
     def state_dict_for_save_checkpoint(self, destination=None, prefix='',
                                        keep_vars=False):
@@ -232,6 +245,9 @@ class Embedding(MegatronModule):
                 destination, prefix, keep_vars)
         state_dict_[self._conv_embeddings_key] \
             = self.conv_embeddings.state_dict(
+                destination, prefix, keep_vars)
+        state_dict_[self._conv_layer_key] \
+            = self.conv_layer.state_dict(
                 destination, prefix, keep_vars)
 #        if self.num_tokentypes > 0:
 #            state_dict_[self._tokentype_embeddings_key] \
@@ -278,6 +294,18 @@ class Embedding(MegatronModule):
                     state_dict_[key.split('conv_embeddings.')[1]] \
                         = state_dict[key]
         self.conv_embeddings.load_state_dict(state_dict_, strict=strict)
+
+        # Conv layer.
+        if self._conv_layer_key in state_dict:
+            state_dict_ = state_dict[self._conv_layer_key]
+        else:
+            # for backward compatibility.
+            state_dict_ = {}
+            for key in state_dict.keys():
+                if 'conv_layer' in key:
+                    state_dict_[key.split('conv_layer.')[1]] \
+                        = state_dict[key]
+        self.conv_layer.load_state_dict(state_dict_, strict=strict)
 
 #        # Tokentype embedding.
 #        if self.num_tokentypes > 0:
