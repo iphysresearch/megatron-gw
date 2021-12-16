@@ -165,8 +165,6 @@ class VocabParallelEmbedding(torch.nn.Module):
         self.num_embeddings_per_partition = int(self.embedding_dim / self.tensor_model_parallel_size)
 
         # Allocate weights and initialize.
-        args = get_args()
-        self.params_dtype = args.params_dtype
         if args.use_cpu_initialization:
             self.weight = Parameter(torch.empty(
                 self.num_embeddings_per_partition, self.embedding_dim,
@@ -232,6 +230,44 @@ class VocabParallelEmbedding(torch.nn.Module):
 
         #return output
 
+class ConvParallelEmbedding(torch.nn.Module):
+    """Embedding parallelized for convolutional computation.
+
+    This is mainly adapted from torch.nn.Embedding and all the default
+    values are kept.
+    Arguments:
+        max_sequence_length: input channels.
+        kernel size: kernel size of conv1d.
+        init_method: method to initialize weights.
+    """
+
+    def __init__(self, max_sequence_length, kernel_size,
+                 init_method=init.xavier_normal_):
+        super(ConvParallelEmbedding, self).__init__()
+        # Keep the input dimensions.
+        self.channels = max_sequence_length
+        self.kernel_size = kernel_size
+        self.padding = 'same'
+        self._weight = None
+        self.tensor_model_parallel_size = get_tensor_model_parallel_world_size()
+        args = get_args()
+
+        self.weight = torch.nn.Conv1d(self.channels, self.channels, self.kernel_size,
+                                      padding=self.padding, dtype=args.params_dtype)
+
+        _initialize_affine_weight_gpu(self.weight, init_method,
+                                      partition_dim=0, stride=1)
+
+
+    def forward(self, input_):
+
+        input_parallel = input_.to(self.params_dtype)
+        # Matrix multiply.
+
+        # Todo:  how to split conv matrix for parallel computing, see implementation of
+        #        torch.nn.modules.conv._ConvNd(Module) as example
+        output = None
+        return output
 
 class ColumnParallelLinear(torch.nn.Module):
     """Linear layer with column parallelism.

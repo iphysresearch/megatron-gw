@@ -137,6 +137,7 @@ class Embedding(MegatronModule):
         self.hidden_size = hidden_size
         self.init_method = init_method
         self.num_tokentypes = num_tokentypes
+        self.kernel_size = 3
 
         args = get_args()
 
@@ -152,6 +153,20 @@ class Embedding(MegatronModule):
         self._position_embeddings_key = 'position_embeddings'
         # Initialize the position embeddings.
         self.init_method(self.position_embeddings.weight)
+
+        # Conv embedding (serial), for local feature extraction
+        # TODO: parallel computing, hence writing in mpu.layers temporarily
+        # self.conv_embeddings = mpu.ConvParallelEmbedding(
+        #     max_sequence_length, self.kernel_size,
+        #     init_method=self.init_method)
+        # self._conv_embeddings_key = 'conv_embeddings'
+        # torch.nn.Conv1d(self.channels, self.channels, self.kernel_size,
+        #                 padding=self.padding, dtype=args.params_dtype)
+        self.conv_embeddings = torch.nn.Conv1d(max_sequence_length, max_sequence_length, self.kernel_size,
+                         padding='same', dtype=args.params_dtype)
+        self._conv_embeddings_key = 'conv_embeddings'
+        # Initialize the position embeddings.
+        self.init_method(self.conv_embeddings.weight)
 #
 #        # Token type embedding.
 #        # Add this as an optional field that can be added through
@@ -190,7 +205,9 @@ class Embedding(MegatronModule):
         # Embeddings.
         words_embeddings = self.word_embeddings(input_ids)
         position_embeddings = self.position_embeddings(position_ids)
-        embeddings = words_embeddings + position_embeddings
+        conv_embeddings = self.conv_embeddings(input_ids.to(self.conv_embeddings.weight.dtype))
+        embeddings = words_embeddings + position_embeddings + conv_embeddings
+
 #        if tokentype_ids is not None:
 #            assert self.tokentype_embeddings is not None
 #            embeddings = embeddings + self.tokentype_embeddings(tokentype_ids)
@@ -212,6 +229,9 @@ class Embedding(MegatronModule):
             = self.word_embeddings.state_dict(destination, prefix, keep_vars)
         state_dict_[self._position_embeddings_key] \
             = self.position_embeddings.state_dict(
+                destination, prefix, keep_vars)
+        state_dict_[self._conv_embeddings_key] \
+            = self.conv_embeddings.state_dict(
                 destination, prefix, keep_vars)
 #        if self.num_tokentypes > 0:
 #            state_dict_[self._tokentype_embeddings_key] \
@@ -246,7 +266,19 @@ class Embedding(MegatronModule):
                     state_dict_[key.split('position_embeddings.')[1]] \
                         = state_dict[key]
         self.position_embeddings.load_state_dict(state_dict_, strict=strict)
-#
+
+        # Conv embedding.
+        if self._conv_embeddings_key in state_dict:
+            state_dict_ = state_dict[self._conv_embeddings_key]
+        else:
+            # for backward compatibility.
+            state_dict_ = {}
+            for key in state_dict.keys():
+                if 'conv_embeddings' in key:
+                    state_dict_[key.split('conv_embeddings.')[1]] \
+                        = state_dict[key]
+        self.conv_embeddings.load_state_dict(state_dict_, strict=strict)
+
 #        # Tokentype embedding.
 #        if self.num_tokentypes > 0:
 #            state_dict_ = {}
