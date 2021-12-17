@@ -125,6 +125,28 @@ def _initialize_affine_weight_cpu(weight, output_size, input_size,
         return master_weight
     return None
 
+class GaussianWeighted(torch.nn.Module):
+    """ Implementation of gaussian weighted self attention.
+    Definition of trainable sigma for gaussian weight
+    """
+    def __init__(self, init_value=1.0):
+        super(GaussianWeighted, self).__init__()
+        args = get_args()
+        self.sq = args.seq_length
+        # sigma is different at each tensor parallel partition
+        self.sq_range = torch.arange(1, self.sq + 1, device=torch.cuda.current_device(), dtype=args.params_dtype)
+        self.sigma = torch.nn.Parameter(torch.tensor([init_value], device=torch.cuda.current_device(), dtype=args.params_dtype))
+        # self.sq_range = torch.arange(1, self.sq + 1, device=torch.device('cuda'), dtype=args.params_dtype)
+        # self.sigma = torch.nn.Parameter(torch.tensor([init_value], device=torch.device('cuda'), dtype=args.params_dtype))
+        self.i = self.sq_range.unsqueeze(0).transpose(0, 1).expand(self.sq, self.sq)
+        self.j = self.sq_range.expand(self.sq, self.sq)
+
+    def forward(self, input):
+        # define gaussian weight
+        weight = torch.exp(-torch.pow(torch.abs(self.i-self.j)/self.sigma, 2))
+        # expand_as 3D and do element-wise multiply
+        output = input * weight.expand(input.shape[0], self.sq, self.sq)
+        return output
 
 class VocabParallelEmbedding(torch.nn.Module):
     """Embedding parallelized in the vocabulary dimension.

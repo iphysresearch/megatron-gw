@@ -172,6 +172,7 @@ class ParallelAttention(MegatronModule):
             self.attention_softmax_in_fp32,
             coeff)
 
+        self.gaussian_weight = mpu.GaussianWeighted()
         # Dropout. Note that for a single iteration, this layer will generate
         # different outputs on different number of parallel partitions but
         # on average it should not be partition dependent.
@@ -273,6 +274,9 @@ class ParallelAttention(MegatronModule):
             query_layer.transpose(0, 1),   # [b * np, sq, hn]
             key_layer.transpose(0, 1).transpose(1, 2),  # [b * np, hn, sk]
             beta=0.0, alpha=(1.0/self.norm_factor))
+
+        # TODO: element-wise multiply with gaussian weight and following abs computation
+        matmul_result = torch.abs(self.gaussian_weight(matmul_result))
 
         # change view to [b, np, sq, sk]
         attention_scores = matmul_result.view(*output_size)
