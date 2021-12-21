@@ -39,7 +39,7 @@ class WaveformDataset(Waveform):
                                                              'luminosity_distance', 'theta_jn', 'phase']
         self._external_parameters = ['geocent_time', 'ra', 'dec', 'psi']
 
-    def load_prior_source_detector(self, filename=None, base='bilby', dets=None, waveform_arguments=None, verbose=True):
+    def load_prior_source_detector(self, filename=None, base='bilby', dets=None, waveform_arguments=None):
         """
         base: str, bilby/pycbc, used for Source
         dets: list, eg: ['H1', 'L1'], used for Detector
@@ -78,7 +78,7 @@ class WaveformDataset(Waveform):
                 dict(waveform_approximant='IMRPhenomXHM', mode_array=[[2,2],[4,-4]])
                 returns the 22 and 4-4 of IMRPhenomXHM.
         """
-        self.prior = Priors(filename, self.conversion, verbose)
+        self.prior = Priors(filename, self.conversion)
         self._update_waveform()  # Create self.parameters
         self._check_parameters_for_generate_waveform(self.parameters)
         self.source = Source(base=base,
@@ -125,7 +125,7 @@ class WaveformDataset(Waveform):
 
         TODO: 更灵活的更新 prior。Need to refine this method.
         """
-        self.start_time = start_time  # BUG 不能及时更新 self.time_array
+        self.start_time = start_time
         self._update_noise()  # Update det.strain_data.start_time
         if self._is_parameters_for_detector_response(self.parameters) and (geocent_time is None):
             self.parameters.update(self.prior.sample_subset(self._external_parameters, 1))
@@ -156,10 +156,6 @@ class WaveformDataset(Waveform):
     @start_time.setter
     def start_time(self, start_time):
         self._start_time = start_time
-
-    # @time_array.setter
-    # def time_array(self):
-    #     return self.dets[list(self.dets.keys())[0]].time_array
 
     # Noise
     @property

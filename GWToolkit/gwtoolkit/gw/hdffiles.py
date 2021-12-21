@@ -19,6 +19,8 @@ from lal import LIGOTimeGPS
 
 # Additional
 from scipy.signal import find_peaks
+from gwtoolkit.utils import pickle_read
+
 
 # -----------------------------------------------------------------------------
 # FUNCTION DEFINITIONS
@@ -200,11 +202,14 @@ class NoiseTimeline:
                  selected_hdf_file_ratio=None,
                  verbose=False):
 
-        # Store the directory and sampling rate of the raw HDF files
-        self.background_data_directory = background_data_directory
+        self.GWTC1_events = pickle_read('/workspace/zhaoty/GWToolkit/gwtoolkit/gw/metadata/GWTC1_events.pkl')
 
         # Print debug messages or not?
         self.verbose = verbose
+
+        # Store the directory and sampling rate of the raw HDF files
+        self.background_data_directory = background_data_directory
+        self.vprint(("Using data directory {0} ...".format(background_data_directory)))
 
         # Create a new random number generator with the given seed to
         # decouple this from the global numpy RNG (for reproducibility)
@@ -223,15 +228,17 @@ class NoiseTimeline:
 
         # Randomly
         if selected_hdf_file_ratio:
-            self.vprint(f'Randomly select {selected_hdf_file_ratio*100:.1f}% from all HDF files', end=' ')
             num_files = len(self.hdf_file_paths)
             indexs = sorted(np.random.randint(num_files, size=int(num_files*selected_hdf_file_ratio), ))
             self.hdf_file_paths = np.asarray(self.hdf_files)[indexs].tolist()
             self.hdf_files = np.asarray(self.hdf_files)[indexs].tolist()
-
+            self.vprint(f'Randomly select {len(self.hdf_files)}({selected_hdf_file_ratio*100:.1f}%) of all HDF files...')
         # Build the timeline for these HDF files
         self.vprint('Building timeline object...', end=' ')
         self.timeline = self._build_timeline()
+
+        self.event_mask = {}
+        self._build_eventmask_in_timeline()
         self.vprint('Done!')
 
     # -------------------------------------------------------------------------
@@ -341,6 +348,26 @@ class NoiseTimeline:
         # Return the completed timeline
         return timeline
 
+    # -------------------------------------------------------------------------
+
+    def _build_eventmask_in_timeline(self):
+
+        for event, meta in self.GWTC1_events.items():
+
+            left = int(meta['trigger-time'] - (meta['duration'] - meta['post-trigger-duration']))
+            right = left + int(meta['duration'])
+
+            if (left >= self.gps_start_time) and (right <= self.gps_end_time):
+                n_entries = self.gps_end_time - self.gps_start_time
+                self.event_mask[f'{event}_mask'] = np.ones(n_entries, dtype=np.int32)
+
+                # Map start/end from GPS time to array indices
+                idx_start = left - self.gps_start_time
+                idx_end = idx_start + int(meta['duration'])
+
+                # Add the mask information to the all detectors
+                self.event_mask[f'{event}_mask'][idx_start:idx_end] = 0
+                self.timeline = {key: mask * self.event_mask[f'{event}_mask'] for key, mask in self.timeline.items()}
     # -------------------------------------------------------------------------
 
     def is_valid(self,

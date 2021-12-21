@@ -484,7 +484,8 @@ def _build_train_valid_test_datasets(data_prefix, data_impl, splits_string,
                     seed=seed)
         return dataset
 
-    train_dataset = build_dataset('train', data_prefix)
+    # train_dataset = build_dataset('train', data_prefix)
+    train_dataset = None
     valid_dataset = build_dataset('valid', data_prefix)
     test_dataset = build_dataset('test', data_prefix)
 

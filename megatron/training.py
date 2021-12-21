@@ -838,15 +838,24 @@ def build_train_valid_test_data_iterators(
         print_rank_0('    test:       {}'.format(train_val_test_num_samples[2]))
 
         # Build the datasets.
-        train_ds, valid_ds, test_ds = build_train_valid_test_datasets_provider(
+        _, valid_ds, test_ds = build_train_valid_test_datasets_provider(
             train_val_test_num_samples)
 
+        from GWToolkit.gwtoolkit.gw.ray import RayDatasetTorch, ray
+        batch_size = 128
+        num_dataset = 32
+        num_range = batch_size // num_dataset
+        num_repeat = 50
+        datasets = RayDatasetTorch.remote(num_dataset=num_dataset)
+        level = 1  # index = iteration
+        pipeline = datasets.pipeline.remote(num_range, num_repeat, batch_size, level=level)
+        train_ds = ray.get(pipeline)
         # Build dataloders.
         train_dataloader = build_pretraining_data_loader(
-            train_ds, args.consumed_train_samples)
+            train_ds, args.consumed_train_samples, 'ray')
         valid_dataloader = build_pretraining_data_loader(
-            valid_ds, args.consumed_valid_samples)
-        test_dataloader = build_pretraining_data_loader(test_ds, 0)
+            valid_ds, args.consumed_valid_samples, 'torch')
+        test_dataloader = build_pretraining_data_loader(test_ds, 0, 'torch')
 
         # Flags to know if we need to do training/validation/testing.
         do_train = train_dataloader is not None and args.train_iters > 0

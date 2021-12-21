@@ -1,6 +1,7 @@
 """
 prior
 """
+import sys
 from pathlib import Path
 import bilby
 from bilby.core.prior import PriorDict
@@ -10,15 +11,18 @@ class Priors(PriorDict):
     """
     Prior
     """
-    def __init__(self, filename=None, conversion=None):
+    def __init__(self, filename=None, conversion=None, verbose=True):
         self._is_conversion_bbh_or_bns(conversion)
         super().__init__(conversion_function=self.conversion_function)
 
+        # Print debug messages or not?
+        self.verbose = verbose
+
         if isinstance(filename, (str, Path)):
             self.from_file(filename=filename)
-            # print('Using priors in', filename)
+            self.vprint('Using priors in', filename)
         else:
-            # print("No prior given, using default BBH priors.")
+            self.vprint("No prior given, using default BBH priors.")
             self.update(bilby.gw.prior.BBHPriorDict())
 
     def _is_conversion_bbh_or_bns(self, conversion):
@@ -122,3 +126,19 @@ class Priors(PriorDict):
             return self.sample_subset(subset, size)
 
         return self.sample(size)
+
+    def vprint(self, string, *args, **kwargs):
+        """
+        Verbose printing: Wrapper around `print()` to only call it if
+        `self.verbose` is set to true.
+
+        Args:
+            string (str): String to be printed if `self.verbose`
+                is `True`.
+            *args: Arguments passed to `print()`.
+            **kwargs: Keyword arguments passed to `print()`.
+        """
+
+        if self.verbose:
+            print(string, *args, **kwargs)
+            sys.stdout.flush()

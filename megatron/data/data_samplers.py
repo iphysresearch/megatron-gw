@@ -22,15 +22,22 @@ from megatron import get_args
 from megatron import mpu
 
 
-def build_pretraining_data_loader(dataset, consumed_samples):
+def build_pretraining_data_loader(dataset, consumed_samples, format):
     """Buld dataloader given an input dataset."""
 
     if dataset is None:
         return None
     args = get_args()
 
+    if format == 'ray':
+        batch_sampler = MegatronPretrainingSampler(
+            total_samples=50*128,
+            consumed_samples=consumed_samples,
+            micro_batch_size=args.micro_batch_size,
+            data_parallel_rank=mpu.get_data_parallel_rank(),
+            data_parallel_size=mpu.get_data_parallel_world_size())
     # Megatron sampler
-    if args.dataloader_type == 'single':
+    elif args.dataloader_type == 'single':
         batch_sampler = MegatronPretrainingSampler(
             total_samples=len(dataset),
             consumed_samples=consumed_samples,

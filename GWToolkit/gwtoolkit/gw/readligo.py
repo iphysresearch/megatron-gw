@@ -408,7 +408,6 @@ class FileList():
             else:
                 directory = '.'
 
-        # print(("Using data directory {0} ...".format(directory)))
         self.directory = directory
         self.cache = cache
         if cache is None:
