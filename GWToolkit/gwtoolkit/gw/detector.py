@@ -42,9 +42,9 @@ class Detector():
         self.ifo = bilby.gw.detector.get_empty_interferometer(name)
         self.update(sampling_frequency, duration, start_time)
 
-    def load_from_GWOSC(self, data_dir, noise_interval, selected_hdf_file_ratio, num_length=1):
+    def load_from_GWOSC(self, data_dir, noise_interval, selected_hdf_file_ratio=0, num_length=1, verbose=False):
         self.gwosc = GWOSC(self.ifo.name, data_dir, self.sampling_frequency, noise_interval, selected_hdf_file_ratio,
-                           num_length=num_length)
+                           num_length=num_length, verbose=verbose)
 
     def update_psd_from_GWOSC(self, seg_sec, **kwds):
         self.gwosc.update_strain()
@@ -203,6 +203,9 @@ class Detector():
         # Below, try to aviod protected-access:
         # self.ifo.strain_data._frequency_mask_updated = False
         self.ifo.minimum_frequency = self.ifo.strain_data.minimum_frequency
+
+        # Set generate new time domain strain
+        self.ifo.strain_data._time_domain_strain = None
 
     def get_detector_response(self, waveform_polarizations, parameters):
         """Get the detector response for a particular waveform

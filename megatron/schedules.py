@@ -64,7 +64,30 @@ def forward_step(forward_step_func, data_iterator, model, input_tensor, losses_r
         output_tensor = loss / get_num_microbatches()
         losses_reduced.append(loss_reduced)
     timers('forward-compute').stop()
+    return output_tensor
 
+def forward_step_wrapper(forward_step_func, data_iterator, model, input_tensor, losses_reduced, test_only):
+    """Forward step for passed-in model.
+
+    If first stage, input tensor is obtained from data_iterator, otherwise
+    passed-in input_tensor is used.
+
+    Returns output tensor."""
+    # timers = get_timers()
+
+    # timers('forward-compute').start()
+    unwrapped_model = unwrap_model(
+        model, (torchDDP, LocalDDP, Float16Module))
+    unwrapped_model.set_input_tensor(input_tensor)
+    output_tensor, loss_func = forward_step_func(data_iterator, model)
+    if test_only:
+        return output_tensor
+    if mpu.is_pipeline_last_stage():
+        output_tensor = loss_func(output_tensor)
+        loss, loss_reduced = output_tensor
+        output_tensor = loss / get_num_microbatches()
+        losses_reduced.append(loss_reduced)
+    # timers('forward-compute').stop()
     return output_tensor
 
 
@@ -109,7 +132,7 @@ def dummy_handler():
 
 
 def forward_backward_no_pipelining(forward_step_func, data_iterator, model,
-                                   optimizer, timers, forward_only):
+                                   optimizer, timers, forward_only, test_only):
     """Run forward and backward passes with no pipeline parallelism
     (no inter-stage communication).
 
@@ -125,19 +148,20 @@ def forward_backward_no_pipelining(forward_step_func, data_iterator, model,
     input_tensor, output_tensor_grad = None, None
     with context_handler():
         for i in range(get_num_microbatches() - 1):
-            output_tensor = forward_step(forward_step_func, data_iterator, model,
-                                         input_tensor, losses_reduced)
+            output_tensor = forward_step_wrapper(forward_step_func, data_iterator, model,
+                                         input_tensor, losses_reduced, test_only)
             if not forward_only:
                 backward_step(optimizer, input_tensor, output_tensor,
                               output_tensor_grad)
 
     # Run computation for last microbatch out of context handler (want to
     # synchronize gradients).
-    output_tensor = forward_step(forward_step_func, data_iterator, model,
-                                 input_tensor, losses_reduced)
+    output_tensor = forward_step_wrapper(forward_step_func, data_iterator, model,
+                                 input_tensor, losses_reduced, test_only)
+    if test_only:
+        return output_tensor
     if not forward_only:
         backward_step(optimizer, input_tensor, output_tensor, output_tensor_grad)
-    from megatron import print_rank_0
     return losses_reduced
 
 

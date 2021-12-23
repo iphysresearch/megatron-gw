@@ -4,6 +4,7 @@ GW source
 import bilby
 from .base import Waveform
 # import pycbc
+bilby.core.utils.setup_logger(log_level=100)
 
 
 class Source(Waveform):
@@ -22,7 +23,6 @@ class Source(Waveform):
             Time duration of data
         """
         super().__init__(sampling_frequency, duration)
-        bilby.core.utils.setup_logger(log_level=0)
         self.base = None
         self.waveform_approximant = None
         self.parameter_conversion = None

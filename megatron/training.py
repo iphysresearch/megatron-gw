@@ -140,7 +140,7 @@ def pretrain(train_valid_test_dataset_provider,
     if args.do_train and args.train_iters > 0:
         iteration = train(forward_step_func,
                           model, optimizer, lr_scheduler,
-                          train_data_iterator, valid_data_iterator)
+                          train_data_iterator, valid_data_iterator, test_data_iterator)
     print_datetime('after training is done')
 
     if args.do_valid:
@@ -152,12 +152,12 @@ def pretrain(train_valid_test_dataset_provider,
     if args.save and iteration != 0:
         save_checkpoint(iteration, model, optimizer, lr_scheduler)
 
-    if args.do_test:
-        # Run on test data.
-        prefix = 'the end of training for test data'
-        evaluate_and_print_results(prefix, forward_step_func,
-                                   test_data_iterator, model,
-                                   0, True)
+    # if args.do_test:
+    #     # Run on test data.
+    #     prefix = 'the end of training for test data'
+    #     evaluate_and_print_results(prefix, forward_step_func,
+    #                                test_data_iterator, model,
+    #                                0, True)
 
 def update_train_iters(args):
 
@@ -366,7 +366,7 @@ def train_step(forward_step_func, data_iterator,
     #print_rank_last("rank last: calculate forward output and backward loss")
     losses_reduced = forward_backward_func(
         forward_step_func, data_iterator, model,
-        optimizer, timers, forward_only=False)
+        optimizer, timers, forward_only=False, test_only=False)
 
     #print_rank_0("rank 0: perform param backward all-reduce")
     #print_rank_last("rank last: perform param backward all-reduce")
@@ -613,7 +613,7 @@ def save_checkpoint_and_time(iteration, model, optimizer, lr_scheduler):
 
 
 def train(forward_step_func, model, optimizer, lr_scheduler,
-          train_data_iterator, valid_data_iterator):
+          train_data_iterator, valid_data_iterator, test_data_iterator):
     """Train the model function."""
     args = get_args()
     timers = get_timers()
@@ -679,6 +679,13 @@ def train(forward_step_func, model, optimizer, lr_scheduler,
             evaluate_and_print_results(prefix, forward_step_func,
                                        valid_data_iterator, model,
                                        iteration, False)
+
+        if args.eval_interval and iteration % args.eval_interval == 0 and \
+           args.do_test:
+            prefix = 'iteration {}'.format(iteration)
+            test_and_print_results(prefix, forward_step_func,
+                                       test_data_iterator, model,
+                                       iteration, False)
         #print_rank_0("rank 0: if saving checkpoint")
         #print_rank_last("rank last: if saving checkpoint")        
         # Checkpointing
@@ -740,7 +747,7 @@ def evaluate(forward_step_func, data_iterator, model, verbose=False):
             forward_backward_func = get_forward_backward_func()
             loss_dicts = forward_backward_func(
                 forward_step_func, data_iterator, model, optimizer=None,
-                timers=None, forward_only=True)
+                timers=None, forward_only=True, test_only=False)
 
             if mpu.is_pipeline_last_stage(ignore_virtual=True):
                 # Reduce across processes.
@@ -790,8 +797,35 @@ def evaluate_and_print_results(prefix, forward_step_func,
     length = len(string) + 1
     print_rank_last('-' * length)
     print_rank_last(string)
-    print_rank_last('-' * length)
+    # print_rank_last('-' * length)
 
+from megatron.data.redis_dataset import DatasetTorchRealEvent
+test_dataset = DatasetTorchRealEvent()
+def test_and_print_results(prefix, forward_step_func,
+                               data_iterator, model,
+                               iteration, verbose=False):
+    """Helper function to evaluate and dump results on screen."""
+    args = get_args()
+
+    # Turn on evaluation mode which disables dropout.
+    for model_module in model:
+        model_module.eval()
+    
+    with torch.no_grad():
+        forward_backward_func = get_forward_backward_func()
+        output = forward_backward_func(
+                forward_step_func, data_iterator, model, optimizer=None,
+                timers=None, forward_only=True, test_only=True)
+
+    predict = output[0][0].unsqueeze(0).cpu()
+    # print("predict.shape:{}".format(predict.shape))
+    match_long, match_short = test_dataset.metric(predict)
+    # print("match_long, match_short:{}, {}".format(match_long, match_short))
+    string = ' at {}, match long value: {} | match short value: {} '.format(prefix, match_long, match_short)
+    length = len(string) + 1
+    # print_rank_last('-' * length)
+    print_rank_last(string)
+    print_rank_last('-' * length)
 
 def cyclic_iter(iter):
     while True:
@@ -832,10 +866,10 @@ def build_train_valid_test_data_iterators(
         train_val_test_num_samples = [train_samples,
                                       eval_iters * args.global_batch_size,
                                       test_iters * args.global_batch_size]
-        print_rank_0(' > datasets target sizes (minimum size):')
-        print_rank_0('    train:      {}'.format(train_val_test_num_samples[0]))
-        print_rank_0('    validation: {}'.format(train_val_test_num_samples[1]))
-        print_rank_0('    test:       {}'.format(train_val_test_num_samples[2]))
+        # print_rank_0(' > datasets target sizes (minimum size):')
+        # print_rank_0('    train:      {}'.format(train_val_test_num_samples[0]))
+        # print_rank_0('    validation: {}'.format(train_val_test_num_samples[1]))
+        # print_rank_0('    test:       {}'.format(train_val_test_num_samples[2]))
 
         # Build the datasets.
         train_ds, valid_ds, test_ds = build_train_valid_test_datasets_provider(

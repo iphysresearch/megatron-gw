@@ -12,7 +12,7 @@ class GWOSC():
     GWOSC
     """
     def __init__(self, ifo, data_dir, sampling_frequency, noise_interval, selected_hdf_file_ratio,
-                 dq_bits=(0, 1, 2, 3), inj_bits=(0, 1, 2, 4), num_length=1):
+                 dq_bits=(0, 1, 2, 3), inj_bits=(0, 1, 2, 4), num_length=1, verbose=False):
         """Instantiate a InterferometerList
 
         noise_interval [sec] : used for estimating PSD
@@ -53,7 +53,8 @@ class GWOSC():
         # Used for scanning the raw data # TODO 下面的类应该提炼成自己的代码
         self.noise_timeline = NoiseTimeline(background_data_directory=data_dir,
                                             selected_hdf_file_ratio=selected_hdf_file_ratio,
-                                            random_seed=random_seed)
+                                            random_seed=random_seed,
+                                            verbose=verbose)
         # Used for load strain
         self.filelist = FileList(directory=data_dir)
 
@@ -72,7 +73,7 @@ class GWOSC():
                                                  self.ifo, self.filelist, inj_dq_cache=0)
 
     def update_randomly_strain(self, ):
-        """Pick a valid samples from streaming data
+        """Pick a list of valid samples from streaming data
         start : [GPS]
 
         FYI:
@@ -182,12 +183,12 @@ def csd_modified(x, y, fs=1.0, window='hann', nperseg=None, noverlap=None, nfft=
 
         Pxy_list.append(Pxy)
     Pxy = numpy.concatenate(Pxy_list, axis=-1)
-    print(Pxy.shape)
+    #print('Before:', Pxy.shape)
 
     if random_timedomain_ratio:
         indexs = numpy.random.randint(Pxy.shape[-1], size=int(Pxy.shape[-1] * random_timedomain_ratio))
         Pxy = Pxy[:, indexs]
-        print(Pxy.shape)
+        #print('After:', Pxy.shape)
 
     # Average over windows.
     if len(Pxy.shape) >= 2 and Pxy.size > 0:

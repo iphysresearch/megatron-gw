@@ -2,13 +2,13 @@
 
 GPUS_PER_NODE=8
 # Change for multinode config
-MASTER_ADDR=192.168.202.138
-MASTER_PORT=6666 # 6006
+MASTER_ADDR=192.168.202.149
+MASTER_PORT=7456 # 6006
 NNODES=1
 NODE_RANK=0
 WORLD_SIZE=$(($GPUS_PER_NODE*$NNODES))
 
-DATA_PATH=./bigdata/
+DATA_PATH=../bigdata/
 CHECKPOINT_PATH=verify1  #pretrain-bert
 VOCAB_FILE=./bert_vocab_files/bert-base-uncased-vocab.txt
 
@@ -20,16 +20,16 @@ DISTRIBUTED_ARGS="--nproc_per_node $GPUS_PER_NODE --nnodes $NNODES --node_rank $
 #export CUDA_VISIBLE_DEVICES=0,1,2,3
 python -m torch.distributed.launch $DISTRIBUTED_ARGS \
        pretrain_gw.py \
-       --tensor-model-parallel-size 2 \
-       --pipeline-model-parallel-size 2 \
+       --tensor-model-parallel-size 1 \
+       --pipeline-model-parallel-size 1 \
        --num-layers 24 \
        --hidden-size 2048 \
        --num-attention-heads 32 \
-       --micro-batch-size 8 \
-       --global-batch-size 64 \
+       --micro-batch-size 4 \
+       --global-batch-size 32 \
        --segment-length 2048 \
-       --seq-length 31 \
-       --max-position-embeddings 31 \
+       --seq-length 127 \
+       --max-position-embeddings 127 \
        --train-iters 200000 \
        --save $CHECKPOINT_PATH \
        --load $CHECKPOINT_PATH \
@@ -46,8 +46,8 @@ python -m torch.distributed.launch $DISTRIBUTED_ARGS \
        --clip-grad 1.0 \
        --lr-warmup-fraction .002 \
        --log-interval 100 \
-       --save-interval 100000 \
-       --eval-interval 1000 \
+       --save-interval 20000 \
+       --eval-interval 500 \
        --eval-iters 10 \
        --dataloader-type cyclic \
        --fp16 \

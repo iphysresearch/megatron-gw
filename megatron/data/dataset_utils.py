@@ -477,16 +477,22 @@ def _build_train_valid_test_datasets(data_prefix, data_impl, splits_string,
                                      max_seq_length_dec,
                                      dataset_type='standard_bert'):
 
-    def build_dataset(name, data_prefix):
-        from megatron.data.gw_dataset import GwDataset
-        dataset = GwDataset(name=name,
-                    data_prefix=data_prefix,
+    def build_dataset(name, data_prefix, host, port):
+        # from megatron.data.gw_dataset import GwDataset
+        # dataset = GwDataset(name=name,
+        #             data_prefix=data_prefix,
+        #             seed=seed)
+        from megatron.data.redis_dataset import RedisDataset
+        dataset = RedisDataset(name=name,
+                    data_prefix=data_prefix, host=host, port=port, 
                     seed=seed)
         return dataset
 
-    train_dataset = build_dataset('train', data_prefix)
-    valid_dataset = build_dataset('valid', data_prefix)
-    test_dataset = build_dataset('test', data_prefix)
+    train_dataset = build_dataset('train', data_prefix, host='192.168.202.149', port=1234)
+    valid_dataset = build_dataset('valid', data_prefix, host='192.168.202.149', port=5153)
+    # test_dataset = build_dataset('test', data_prefix)
+    from megatron.data.redis_dataset import DatasetTorchRealEvent
+    test_dataset = DatasetTorchRealEvent()
 
     return (train_dataset, valid_dataset, test_dataset)
 

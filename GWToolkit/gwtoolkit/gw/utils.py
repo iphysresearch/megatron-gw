@@ -2,8 +2,7 @@
 Utils
 """
 import numpy
-import pickle
-import json
+
 
 def overlap(signal_ab, power_spectral_density=None, delta_frequency=None,
             lower_cut_off=None, upper_cut_off=None):
