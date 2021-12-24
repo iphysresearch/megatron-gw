@@ -3,6 +3,7 @@ m.patch()               # Important line to monkey-patch for numpy support!
 
 import redis
 import numpy as np
+from tqdm import tqdm
 
 connection_pool = redis.ConnectionPool(host='localhost', port=6379, db=0, decode_responses=False)
 r = redis.Redis(connection_pool=connection_pool)
@@ -28,3 +29,9 @@ def set_get_Redis(r, value, name):
 
 def is_exist_Redis(name):
     return r.exists(name) 
+
+def clear_Redis():
+    for key in tqdm(r.keys('*')):
+        r.delete(key)
+    r.flushall()
+    r.flushdb()

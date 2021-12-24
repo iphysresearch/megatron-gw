@@ -4,7 +4,7 @@ from gwtoolkit.gw.ray import RayDatasetTorch, RayDataset, ray
 from gwtoolkit.redis.utils import toRedis, is_exist_Redis
 
 from torch.utils.data import DataLoader
-# import ray
+from tqdm import tqdm
 
 import numpy as np
 
@@ -22,38 +22,50 @@ def update_level(i):
 
 
 batch_size = 1
-num_dataset = 1
+num_dataset = 32 if batch_size >= 32 else batch_size
 num_range = batch_size//num_dataset
-num_repeat = 100
+num_repeat = 4
 
 datasets = RayDatasetTorch.remote(num_dataset=num_dataset)
+start = 0
+end = 3_0000
 
-index = 0
+start = 3_0000
+end = 6_0000
 
-while True:
-    try:
-        index += 1
-        print(f'Runing on index={index}.')
+start = 6_0000
+end = 10_0000
 
-        level = update_level(index)
-        pipeline = datasets.pipeline.remote(num_range, num_repeat, batch_size, level=level)
-        iteration = iter(ray.get(pipeline))
-        for i, _ in enumerate(range(num_repeat)):
-        # for i, (data, signal, noise, params) in enumerate(ray.get(pipeline)):
+def temp(index):
+    for i, _ in enumerate(range(num_repeat)):
         if is_exist_Redis(f'data_{index}_{i}'):
-            seed = np.random.rand()
-            toRedis(seed, f'seed_data_{index}_{i}')
-            toRedis(seed, f'seed_signal_{index}_{i}')
-            toRedis(seed, f'seed_params_{index}_{i}')      
-            
-            (data, signal, params) = next(iteration)
-            toRedis(data, f'data_{index}_{i}')
-            toRedis(signal, f'signal_{index}_{i}')
-            toRedis(params, f'params_{index}_{i}')
+            continue
+        else:
+            return None
+    else:
+        return 1
 
-      
-    except KeyboardInterrupt:
-        print('finish!')
-        break
+for index in tqdm(range(start//num_repeat, end//num_repeat)):
+    if temp(index):
+        continue
+    level = update_level(index)
+    pipeline = datasets.pipeline.remote(num_range, num_rep4eat, batch_size, level=level)
+    iteration = iter(ray.get(pipeline))
+    for i, _ in enumerate(range(num_repeat)):
+        if is_exist_Redis(f'data_{index}_{i}'):
+            continue
+        
+        seed = np.random.rand()
+
+        (data, signal, params) = next(iteration)
+        toRedis(data, f'data_{index}_{i}')
+        toRedis(seed, f'seed_data_{index}_{i}')
+
+        toRedis(signal, f'signal_{index}_{i}')
+        toRedis(seed, f'seed_signal_{index}_{i}')
+
+        toRedis(params, f'params_{index}_{i}')
+        toRedis(seed, f'seed_params_{index}_{i}')
+        
 
 ray.shutdown()

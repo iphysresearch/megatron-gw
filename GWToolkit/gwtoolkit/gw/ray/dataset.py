@@ -111,7 +111,7 @@ class RayDataset():
             '/opt/conda/lib/python3.8/site-packages/bilby/gw/detector/noise_curves/aLIGO_late_asd.txt',
         ]
         self.use_which_design_ASD_for_whiten = None  # None: Use on-source for whiten
-        low, high = 2, 50
+        low, high = 13, 30
         self.strategy_for_target_optimal_snr = (low, high)  # or None or Float/Int
         # PSD used for whiten
         self.fasd = None
