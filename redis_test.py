@@ -60,14 +60,12 @@ def model_provider(pre_process=True, post_process=True):
     args = get_args()
     num_tokentypes = 15 if args.bert_binary_head else 0
 
-    model = BertModel(
+    return BertModel(
         num_tokentypes=num_tokentypes,
         add_binary_head=args.bert_binary_head,
         parallel_output=False,
         pre_process=pre_process,
         post_process=post_process)
-
-    return model
 
 
 def get_batch(data_iterator):
@@ -81,10 +79,7 @@ def get_batch(data_iterator):
     datatype = torch.float64
 
     # Broadcast data.
-    if data_iterator is not None:
-        data = next(data_iterator)
-    else:
-        data = None
+    data = next(data_iterator) if data_iterator is not None else None
     data_b = mpu.broadcast_data(keys, data, datatype)
 
     # Unpack.
@@ -141,35 +136,34 @@ def forward_step(data_iterator, model):
     output_tensor = model(noisy_signal, padding_mask, tokentype_ids=types,
                           lm_labels=lm_labels)
 
-    if torch.distributed.get_rank() == 0:
-        if len(output_tensor)==2:
-            vis_denoised = output_tensor[0].cpu().numpy()
-            vis_noisy = noisy_signal.cpu().numpy()
-            vis_clean = clean_signal.cpu().numpy()
-            vis_mask = loss_mask.cpu().numpy()
-            vis_all = np.append(vis_denoised, vis_noisy, axis=0)
-            vis_all = np.append(vis_all, vis_clean, axis=0)
-            vis_all = np.append(vis_all, vis_mask, axis=0)
-            for ind in range(vis_noisy.shape[0]):
-                long, short = metric(vis_denoised[ind], vis_clean[ind], vis_mask[ind])
-                print_rank_0(' at iteration {}, match long value: {} | match short value: {} '.format(args.iteration, long, short))
-                if ind == 0:
-                    match_long_short = np.array([long, short], dtype=np.float32)
-                else:
-                    match_long_short = np.append(match_long_short, [long, short], axis=0)
-            from pathlib import Path
-            import os
-            folder = os.path.join('valid','{}_{}'.format(args.load.strip('/'), args.iteration))
-            p = Path(folder)
-            p.mkdir(parents=True, exist_ok=True)
-            tmp_seed = args.consumed_valid_samples  #np.random.randint(10000)
-            dprank = torch.distributed.get_rank()
-            data_fn = 'data-{}-{}.npy'.format(dprank, tmp_seed)
-            param_fn = 'param-{}-{}.npy'.format(dprank, tmp_seed)
-            match_fn = 'match-{}-{}.npy'.format(dprank, tmp_seed)
-            np.save(p / data_fn, vis_all)
-            np.save(p / param_fn, params.cpu().numpy())
-            np.save(p / match_fn, match_long_short)
+    if torch.distributed.get_rank() == 0 and len(output_tensor) == 2:
+        vis_denoised = output_tensor[0].cpu().numpy()
+        vis_noisy = noisy_signal.cpu().numpy()
+        vis_clean = clean_signal.cpu().numpy()
+        vis_mask = loss_mask.cpu().numpy()
+        vis_all = np.append(vis_denoised, vis_noisy, axis=0)
+        vis_all = np.append(vis_all, vis_clean, axis=0)
+        vis_all = np.append(vis_all, vis_mask, axis=0)
+        for ind in range(vis_noisy.shape[0]):
+            long, short = metric(vis_denoised[ind], vis_clean[ind], vis_mask[ind])
+            print_rank_0(' at iteration {}, match long value: {} | match short value: {} '.format(args.iteration, long, short))
+            if ind == 0:
+                match_long_short = np.array([long, short], dtype=np.float32)
+            else:
+                match_long_short = np.append(match_long_short, [long, short], axis=0)
+        from pathlib import Path
+        import os
+        folder = os.path.join('valid','{}_{}'.format(args.load.strip('/'), args.iteration))
+        p = Path(folder)
+        p.mkdir(parents=True, exist_ok=True)
+        tmp_seed = args.consumed_valid_samples  #np.random.randint(10000)
+        dprank = torch.distributed.get_rank()
+        data_fn = 'data-{}-{}.npy'.format(dprank, tmp_seed)
+        param_fn = 'param-{}-{}.npy'.format(dprank, tmp_seed)
+        match_fn = 'match-{}-{}.npy'.format(dprank, tmp_seed)
+        np.save(p / data_fn, vis_all)
+        np.save(p / param_fn, params.cpu().numpy())
+        np.save(p / match_fn, match_long_short)
 
     # return output_tensor, partial(loss_func, loss_mask, sentence_order)
     # print("loss mask shape:{}".format(loss_mask.shape))
@@ -177,10 +171,9 @@ def forward_step(data_iterator, model):
 
 def build_dataset(name, data_prefix, host, port):
     from megatron.data.redis_dataset import RedisDataset
-    dataset = RedisDataset(name=name,
+    return RedisDataset(name=name,
                 data_prefix=data_prefix, host=host, port=port, 
                 seed=1234)
-    return dataset
 
 def test_datasets_provider():
     """Build train, valid, and test datasets."""
@@ -189,12 +182,11 @@ def test_datasets_provider():
     print_rank_0('> building train, validation, and test datasets '
                  'for BERT ...')
 
-    test_ds = build_dataset('test', 'nouse', host='192.168.202.149', port=5153)
     # train_ds = None
     # valid_ds = None
 
     # return train_ds, valid_ds, test_ds
-    return test_ds
+    return build_dataset('test', 'nouse', host='192.168.202.149', port=5153)
 
 import time
 _TRAIN_START_TIME = time.time()
@@ -244,8 +236,8 @@ def evaluate(forward_step_func, data_iterator, model, verbose=False):
     for model_module in model:
         model_module.train()
 
-    for key in total_loss_dict:
-        total_loss_dict[key] /= args.eval_iters * get_num_microbatches()
+    for key, value in total_loss_dict.items():
+        value /= args.eval_iters * get_num_microbatches()
 
     return total_loss_dict
 
@@ -288,8 +280,7 @@ def print_datetime(string):
 
 def cyclic_iter(iter):
     while True:
-        for x in iter:
-            yield x
+        yield from iter
 
 def build_test_data_iterators(
         build_test_datasets_provider):
@@ -328,12 +319,10 @@ def build_test_data_iterators(
     assert dl_type in ['single', 'cyclic']
 
     if test_dataloader is not None:
-        test_data_iterator = iter(test_dataloader) if dl_type == 'single' \
+        return iter(test_dataloader) if dl_type == 'single' \
                              else iter(cyclic_iter(test_dataloader))
     else:
-        test_data_iterator = None
-
-    return test_data_iterator
+        return None
 
 def test(test_dataset_provider,
              model_provider,

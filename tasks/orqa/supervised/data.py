@@ -84,8 +84,8 @@ def build_tokens_types_paddings_from_ids(text_ids, max_seq_length,
 
     # Cap the size.
     if len(enc_ids) > max_seq_length - 1:
-        enc_ids = enc_ids[0: max_seq_length - 1]
-        tokentypes_enc = tokentypes_enc[0: max_seq_length - 1]
+        enc_ids = enc_ids[:max_seq_length - 1]
+        tokentypes_enc = tokentypes_enc[:max_seq_length - 1]
 
     # [SEP].
     enc_ids.append(sep_id)
@@ -201,9 +201,8 @@ class OpenRetrievalAbstractDataset(ABC, Dataset):
         elif self.train_with_neg:
             hard_negative_ctx = raw_sample['hard_negative_context']
             negative_ctx = raw_sample['negative_context']
-            if True:  # TODO: fix this or remove this condition
-                random.shuffle(hard_negative_ctx)
-                random.shuffle(negative_ctx)
+            random.shuffle(hard_negative_ctx)
+            random.shuffle(negative_ctx)
 
             neg_ctx_list = hard_negative_ctx[:self.train_hard_neg]
             # In the Google NQ dataset by DPR paper, there are around more than
@@ -220,13 +219,11 @@ class OpenRetrievalAbstractDataset(ABC, Dataset):
             neg_ctx_id_list = None
             neg_ctx_types_list = None
 
-        sample = build_sample(query_ids, query_types, query_pad_mask,
+        return build_sample(query_ids, query_types, query_pad_mask,
                               ctx_ids, ctx_types, ctx_pad_mask,
                               raw_sample['answers'],
                               neg_ctx_id_list, neg_ctx_types_list,
                               include_neg=self.evaluate or self.train_with_neg)
-
-        return sample
 
     @staticmethod
     @abstractmethod
@@ -278,11 +275,7 @@ class NQSupervisedDataset(OpenRetrievalAbstractDataset):
                     hard_neg_context = []
 
                 # Negative Contexts
-                if len(row['negative_ctxs']) > 0:
-                    neg_context = row['negative_ctxs']
-                else:
-                    neg_context = []
-
+                neg_context = row['negative_ctxs'] if len(row['negative_ctxs']) > 0 else []
                 answers = row['answers']
                 sample = {'question': question,
                           'pos_context': pos_context,

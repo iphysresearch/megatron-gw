@@ -145,13 +145,12 @@ class GPT2Tokenizer(object):
             special_tokens = open(special_tokens_file, encoding='utf-8').read().split('\n')[:-1]
         else:
             special_tokens = kwargs.pop('special_tokens', [])
-        tokenizer = cls(
+        return cls(
             resolved_vocab_file,
             resolved_merges_file,
             special_tokens=special_tokens,
             *inputs,
             **kwargs)
-        return tokenizer
 
     def __init__(self, vocab_file, merges_file, errors='replace',
                  special_tokens=None, max_len=None):
@@ -187,8 +186,10 @@ class GPT2Tokenizer(object):
             self.special_tokens = {}
             self.special_tokens_decoder = {}
             return
-        self.special_tokens = dict((tok, len(self.encoder) + i)
-                                   for i, tok in enumerate(special_tokens))
+        self.special_tokens = {
+            tok: len(self.encoder) + i for i, tok in enumerate(special_tokens)
+        }
+
         self.special_tokens_decoder = {v: k for k, v in self.special_tokens.items()}
         logger.info("Special tokens {}".format(self.special_tokens))
 
@@ -241,7 +242,7 @@ class GPT2Tokenizer(object):
                 token = ''.join(self.byte_encoder[ord(b)] for b in token)
             else:
                 token = ''.join(self.byte_encoder[b] for b in token.encode('utf-8'))
-            bpe_tokens.extend(bpe_token for bpe_token in self.bpe(token).split(' '))
+            bpe_tokens.extend(iter(self.bpe(token).split(' ')))
         return bpe_tokens
 
     def convert_tokens_to_ids(self, tokens):

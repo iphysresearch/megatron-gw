@@ -56,9 +56,8 @@ class GLUEAbstractDataset(ABC, Dataset):
         ids, types, paddings = build_tokens_types_paddings_from_text(
             raw_sample['text_a'], raw_sample['text_b'],
             self.tokenizer, self.max_seq_length)
-        sample = build_sample(ids, types, paddings,
+        return build_sample(ids, types, paddings,
                               raw_sample['label'], raw_sample['uid'])
-        return sample
 
     @abstractmethod
     def process_samples_from_single_path(self, datapath):

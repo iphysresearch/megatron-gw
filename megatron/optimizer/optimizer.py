@@ -209,11 +209,7 @@ class Float16OptimizerWithFloat16Params(MegatronOptimizer):
         # Dummy tensor needed for apex multi-apply tensor.
         # For bfloat, we don't have multi-tensor apply and for now
         # we set it to none so the multi-tensor apply gets ignored.
-        if bf16:
-            self._dummy_overflow_buf = None
-        else:
-            self._dummy_overflow_buf = torch.cuda.IntTensor([0])
-
+        self._dummy_overflow_buf = None if bf16 else torch.cuda.IntTensor([0])
         # In case grad scaler is not passed, define the unity scale.
         if self.grad_scaler is None:
             self._scale_one = torch.cuda.FloatTensor([1.0])
@@ -308,9 +304,8 @@ class Float16OptimizerWithFloat16Params(MegatronOptimizer):
                 if self.params_have_main_grad:
                     #print_rank_0("model_param.shape:{}".format(model_param.shape))
                     main_param.grad = model_param.main_grad.float()
-                else:
-                    if model_param.grad is not None:
-                        main_param.grad = model_param.grad.float()
+                elif model_param.grad is not None:
+                    main_param.grad = model_param.grad.float()
         # For fp32 grads, we need to reset the grads to main grad.
         if self.params_have_main_grad:
             for model_group in self.fp32_from_fp32_groups:
@@ -340,9 +335,7 @@ class Float16OptimizerWithFloat16Params(MegatronOptimizer):
                                      op=torch.distributed.ReduceOp.MAX,
                                      group=mpu.get_model_parallel_group())
 
-        # Check for nan.
-        found_inf_flag = (self.found_inf.item() > 0)
-        return found_inf_flag
+        return (self.found_inf.item() > 0)
 
 
     def _get_model_and_main_params_data_float16(self):
@@ -425,8 +418,7 @@ class Float16OptimizerWithFloat16Params(MegatronOptimizer):
 
 
     def state_dict(self):
-        state_dict = {}
-        state_dict['optimizer'] = self.optimizer.state_dict()
+        state_dict = {'optimizer': self.optimizer.state_dict()}
         if self.grad_scaler:
             state_dict['grad_scaler'] = self.grad_scaler.state_dict()
         state_dict['fp32_from_fp16_params'] = self.fp32_from_float16_groups
@@ -446,13 +438,12 @@ class Float16OptimizerWithFloat16Params(MegatronOptimizer):
         if 'grad_scaler' not in state_dict:
             print_rank_0('***WARNING*** found an old checkpoint, will not '
                          'load grad scaler ...')
+        elif self.grad_scaler:
+            self.grad_scaler.load_state_dict(state_dict['grad_scaler'])
         else:
-            if self.grad_scaler:
-                self.grad_scaler.load_state_dict(state_dict['grad_scaler'])
-            else:
-                print_rank_0('***WARNING*** fould the grad scaler in the '
-                             'checkpoint but it is None in the class. '
-                             'Skipping loading grad scaler ...')
+            print_rank_0('***WARNING*** fould the grad scaler in the '
+                         'checkpoint but it is None in the class. '
+                         'Skipping loading grad scaler ...')
 
         # Copy data for the main params.
         fp32_from_float16_params_key = 'fp32_from_fp16_params'

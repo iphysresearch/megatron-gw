@@ -62,7 +62,7 @@ def _communicate(tensor_send_next, tensor_send_prev, recv_prev, recv_next,
             args.scatter_gather_tensors_in_pipeline:
         tensor_chunk_shape = reduce(operator.mul, tensor_shape, 1) // \
             mpu.get_tensor_model_parallel_world_size()
-        
+
     else:
         tensor_chunk_shape = tensor_shape
     #print_rank_last("tensor_shape:{}".format(tensor_shape))
@@ -127,7 +127,7 @@ def _communicate(tensor_send_next, tensor_send_prev, recv_prev, recv_next,
                 torch.distributed.irecv, tensor_recv_next,
                 mpu.get_pipeline_model_parallel_next_rank())
             ops.append(recv_next_op)
-        if len(ops) > 0:
+        if ops:
             reqs = torch.distributed.batch_isend_irecv(ops)
             for req in reqs:
                 req.wait()

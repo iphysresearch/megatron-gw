@@ -25,11 +25,7 @@ if __name__ == '__main__':
 
     input = sys.argv[1]
     output = sys.argv[2]
-    if len(sys.argv) > 3:
-        jaccard_similarity_threshold = float(sys.argv[3])
-    else:
-        jaccard_similarity_threshold = 0.7
-
+    jaccard_similarity_threshold = float(sys.argv[3]) if len(sys.argv) > 3 else 0.7
     url_to_index = {}
     index_to_urls = []
     counter = 0
@@ -73,18 +69,16 @@ if __name__ == '__main__':
     total_remove = 0
     total_remain = 0
     for urls in index_to_urls:
-        if urls is not None:
-            if len(urls) > 1:
-                total_remove += (len(urls) - 1)
-                total_remain += 1
+        if urls is not None and len(urls) > 1:
+            total_remove += (len(urls) - 1)
+            total_remain += 1
     print('out of {} urls, only {} are unique and {} should be removed'.format(
         total_remove+total_remain, total_remain, total_remove))
 
     with open(output, 'wb') as f:
         for i, urls in enumerate(index_to_urls):
-            if urls is not None:
-                if len(urls) > 1:
-                    myjson = json.dumps({str(i): list(urls)},
-                                        ensure_ascii=False)
-                    f.write(myjson.encode('utf-8'))
-                    f.write('\n'.encode('utf-8'))
+            if urls is not None and len(urls) > 1:
+                myjson = json.dumps({str(i): list(urls)},
+                                    ensure_ascii=False)
+                f.write(myjson.encode('utf-8'))
+                f.write('\n'.encode('utf-8'))

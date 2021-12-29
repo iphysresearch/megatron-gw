@@ -130,10 +130,7 @@ class _BertWordPieceTokenizer(AbstractTokenizer):
     """Original BERT wordpiece tokenizer."""
 
     def __init__(self, vocab_file, lower_case=True, vocab_extra_ids=0):
-        if lower_case:
-            name = 'BERT Lower Case'
-        else:
-            name = 'BERT Upper Case'
+        name = 'BERT Lower Case' if lower_case else 'BERT Upper Case'
         super().__init__(name)
         self.tokenizer = FullBertTokenizer(vocab_file, do_lower_case=lower_case)
         self.cls_id = self.tokenizer.vocab['[CLS]']
@@ -155,9 +152,10 @@ class _BertWordPieceTokenizer(AbstractTokenizer):
 
         # (dsachan) Add additional special tokens
         # These can be used as sentinel tokens in T5 model inputs
-        additional_special_tokens = []
-        additional_special_tokens.extend(
-            ["<extra_id_{}>".format(i) for i in range(vocab_extra_ids)])
+        additional_special_tokens = [
+            "<extra_id_{}>".format(i) for i in range(vocab_extra_ids)
+        ]
+
         self.add_additional_special_tokens(additional_special_tokens)
 
     def add_token(self, token):
@@ -197,14 +195,7 @@ class _BertWordPieceTokenizer(AbstractTokenizer):
         exclude_list = ['[PAD]', '[CLS]']
         non_pads = [t for t in tokens if t not in exclude_list]
 
-        result = ""
-        for s in non_pads:
-            if s.startswith("##"):
-                result += s[2:]
-            else:
-                result += " " + s
-
-        return result
+        return "".join(s[2:] if s.startswith("##") else " " + s for s in non_pads)
 
     @property
     def cls(self):

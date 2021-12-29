@@ -45,10 +45,8 @@ def glue_classification(num_classes, Dataset,
 
         print_rank_0('building classification model for {} ...'.format(
             args.task))
-        model = Classification(num_classes=num_classes, num_tokentypes=2,
+        return Classification(num_classes=num_classes, num_tokentypes=2,
                                pre_process=pre_process, post_process=post_process)
-
-        return model
 
     def metrics_func_provider():
         """Privde metrics callback function."""

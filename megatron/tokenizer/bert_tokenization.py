@@ -135,10 +135,7 @@ def load_vocab(vocab_file):
 
 def convert_by_vocab(vocab, items):
     """Converts a sequence of [tokens|ids] using the vocab."""
-    output = []
-    for item in items:
-        output.append(vocab[item])
-    return output
+    return [vocab[item] for item in items]
 
 
 def convert_tokens_to_ids(vocab, tokens):
@@ -154,8 +151,7 @@ def whitespace_tokenize(text):
     text = text.strip()
     if not text:
         return []
-    tokens = text.split()
-    return tokens
+    return text.split()
 
 
 class FullTokenizer(object):
@@ -246,8 +242,7 @@ class BasicTokenizer(object):
                 token = self._run_strip_accents(token)
             split_tokens.extend(self._run_split_on_punc(token))
 
-        output_tokens = whitespace_tokenize(" ".join(split_tokens))
-        return output_tokens
+        return whitespace_tokenize(" ".join(split_tokens))
 
     def _run_strip_accents(self, text):
         """Strips accents from a piece of text."""
@@ -303,17 +298,14 @@ class BasicTokenizer(object):
         # as is Japanese Hiragana and Katakana. Those alphabets are used to write
         # space-separated words, so they are not treated specially and handled
         # like the all of the other languages.
-        if ((cp >= 0x4E00 and cp <= 0x9FFF) or  #
+        return ((cp >= 0x4E00 and cp <= 0x9FFF) or  #
             (cp >= 0x3400 and cp <= 0x4DBF) or  #
             (cp >= 0x20000 and cp <= 0x2A6DF) or  #
             (cp >= 0x2A700 and cp <= 0x2B73F) or  #
             (cp >= 0x2B740 and cp <= 0x2B81F) or  #
             (cp >= 0x2B820 and cp <= 0x2CEAF) or
             (cp >= 0xF900 and cp <= 0xFAFF) or  #
-                (cp >= 0x2F800 and cp <= 0x2FA1F)):  #
-            return True
-
-        return False
+                (cp >= 0x2F800 and cp <= 0x2FA1F))
 
     def _clean_text(self, text):
         """Performs invalid character removal and whitespace cleanup on text."""
@@ -395,24 +387,20 @@ def _is_whitespace(char):
     """Checks whether `chars` is a whitespace character."""
     # \t, \n, and \r are technically contorl characters but we treat them
     # as whitespace since they are generally considered as such.
-    if char == " " or char == "\t" or char == "\n" or char == "\r":
+    if char in [" ", "\t", "\n", "\r"]:
         return True
     cat = unicodedata.category(char)
-    if cat == "Zs":
-        return True
-    return False
+    return cat == "Zs"
 
 
 def _is_control(char):
     """Checks whether `chars` is a control character."""
     # These are technically control characters but we count them as whitespace
     # characters.
-    if char == "\t" or char == "\n" or char == "\r":
+    if char in ["\t", "\n", "\r"]:
         return False
     cat = unicodedata.category(char)
-    if cat in ("Cc", "Cf"):
-        return True
-    return False
+    return cat in ("Cc", "Cf")
 
 
 def _is_punctuation(char):
@@ -426,6 +414,4 @@ def _is_punctuation(char):
             (cp >= 91 and cp <= 96) or (cp >= 123 and cp <= 126)):
         return True
     cat = unicodedata.category(char)
-    if cat.startswith("P"):
-        return True
-    return False
+    return bool(cat.startswith("P"))

@@ -97,15 +97,14 @@ def parse_args(extra_args_provider=None, defaults={},
         # For default to be valid, it should not be provided in the
         # arguments that are passed to the program. We check this by
         # ensuring the arg is set to None.
-        if getattr(args, key) is not None:
-            if args.rank == 0:
-                print('WARNING: overriding default arguments for {key}:{v} \
-                       with {key}:{v2}'.format(key=key, v=defaults[key],
-                                               v2=getattr(args, key)),
-                                               flush=True)
-        else:
+        if getattr(args, key) is None:
             setattr(args, key, defaults[key])
 
+        elif args.rank == 0:
+            print('WARNING: overriding default arguments for {key}:{v} \
+                       with {key}:{v2}'.format(key=key, v=defaults[key],
+                                           v2=getattr(args, key)),
+                                           flush=True)
     # Batch size.
     assert args.micro_batch_size is not None
     assert args.micro_batch_size > 0

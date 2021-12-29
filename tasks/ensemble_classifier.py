@@ -20,7 +20,7 @@ def process_files(args):
                 if name not in all_predictions:
                     all_predictions[name] = np.array(predictions)
                     if args.labels is None:
-                        args.labels = [i for i in range(all_predictions[name].shape[1])]
+                        args.labels = list(range(all_predictions[name].shape[1]))
                     if args.eval:
                         all_labels[name] = np.array(labels)
                     all_uid[name] = np.array(uid)

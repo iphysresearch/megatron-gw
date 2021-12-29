@@ -147,10 +147,7 @@ class CudaRNGStatesTracker:
     def get_states(self):
         """Get rng states. Copy the dictionary so we have direct
         pointers to the states, not just a pointer to the dictionary."""
-        states = {}
-        for name in self.states_:
-            states[name] = self.states_[name]
-        return states
+        return {name: self.states_[name] for name in self.states_}
 
     def set_states(self, states):
         """Set the rng states. For efficiency purposes, we do not check

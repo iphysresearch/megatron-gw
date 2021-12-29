@@ -52,8 +52,7 @@ class Normalize_strain():
         if Xmax is None:
             Xmax = X.max(axis=-1, keepdims=True).max(axis=-2, keepdims=True)
         X_std = (X - Xmin/2) / (Xmax - Xmin)
-        X_scaled = X_std * (self.feat_max - self.feat_min) + self.feat_min/2
-        return X_scaled
+        return X_std * (self.feat_max - self.feat_min) + self.feat_min/2
 
     def inverse_transform_data(self, X_scaled, Xmin, Xmax):
         """'minimax' method to inverse standardizing

@@ -24,15 +24,12 @@ def general_ict_model_provider(only_query_model=False, only_block_model=False):
 
     print_rank_0('building ICTBertModel...')
 
-    # simpler to just keep using 2 tokentypes since the LM we initialize with has 2 tokentypes
-    model = ICTBertModel(
+    return ICTBertModel(
         ict_head_size=args.ict_head_size,
         num_tokentypes=2,
         parallel_output=True,
         only_query_model=only_query_model,
         only_block_model=only_block_model)
-
-    return model
 
 
 class ICTBertModel(MegatronModule):
@@ -186,10 +183,12 @@ class IREncoderBertModel(MegatronModule):
         """For easy load when model is combined with other heads,
         add an extra key."""
 
-        state_dict_ = {}
-        state_dict_[self._language_model_key] \
-            = self.language_model.state_dict_for_save_checkpoint(
-            destination, prefix, keep_vars)
+        state_dict_ = {
+            self._language_model_key: self.language_model.state_dict_for_save_checkpoint(
+                destination, prefix, keep_vars
+            )
+        }
+
         state_dict_[self._ict_head_key] \
             = self.ict_head.state_dict(destination, prefix, keep_vars)
         return state_dict_

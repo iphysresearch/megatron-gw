@@ -23,19 +23,11 @@ def toRedis(value,name):
 
 def update_level(i):
     return 0
-    if i%100==0:
-        return 4
-    elif i%50==0:
-        return 3
-    elif i%10==0:
-        return 2
-    else:
-        return 1
     # np.array([update_level(i) for i in range(1000)])
 
 
 batch_size = 32
-num_dataset = 32 if batch_size >= 32 else batch_size
+num_dataset = min(batch_size, 32)
 num_range = batch_size//num_dataset
 num_repeat = 2
 

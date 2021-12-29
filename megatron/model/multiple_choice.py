@@ -105,10 +105,12 @@ class MultipleChoice(MegatronModule):
         """For easy load when model is combined with other heads,
         add an extra key."""
 
-        state_dict_ = {}
-        state_dict_[self._language_model_key] \
-            = self.language_model.state_dict_for_save_checkpoint(
-                destination, prefix, keep_vars)
+        state_dict_ = {
+            self._language_model_key: self.language_model.state_dict_for_save_checkpoint(
+                destination, prefix, keep_vars
+            )
+        }
+
         if self.post_process:
             state_dict_[self._multichoice_head_key] \
                 = self.multichoice_head.state_dict(

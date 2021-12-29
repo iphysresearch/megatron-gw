@@ -28,8 +28,7 @@ import os
 # This function is adapted from:
 #   https://github.com/mattilyra/LSH/blob/master/examples/Introduction.ipynb
 def shingles(text, char_ngram=5):
-    return set(text[head:head + char_ngram]
-               for head in range(0, len(text) - char_ngram))
+    return {text[head:head + char_ngram] for head in range(len(text) - char_ngram)}
 
 
 # This function is adapted from:
@@ -74,9 +73,9 @@ def url_pairs_to_remove(args, bucket_urls, url_doc):
         main_url = items[np.random.randint(0, len(items))]
         main_dhingles = shingles(url_doc[main_url])
 
-        for i in range(0, len(items)):
+        for item in items:
             counter_local += 1
-            other_url = items[i]
+            other_url = item
             if other_url == main_url:
                 continue
             other_shingles = shingles(url_doc[other_url])
@@ -91,7 +90,7 @@ def url_pairs_to_remove(args, bucket_urls, url_doc):
                 bucket_urls.remove(other_url)
 
         bucket_urls.remove(main_url)
-        if len(remove_urls) > 0:
+        if remove_urls:
             remove_urls_list.append({main_url: remove_urls})
         iteration += 1
     return remove_urls_list, deduped_local, counter_local
@@ -131,57 +130,54 @@ def compute_jaccard(each_bin, num_bins, start_time_local):
 
 def find_pair_urls_parallel(args, lshcache, url_doc):
     start_time = time.time()
-    f_out = open(args.output, 'wb')
-    deduped, counter = 0, 0
+    with open(args.output, 'wb') as f_out:
+        deduped, counter = 0, 0
 
-    # compute jaccards of buckets in bin in parallel (parallelism
-    # limited to # of bins)
-    num_bins = len(lshcache.bins)
-    pool = multiprocessing.Pool(num_bins)
-    compute_jaccard_partial = partial(compute_jaccard, num_bins=num_bins, \
-        start_time_local=start_time)
-    # don't need to pass args and url_doc as they are already shared
-    compute_jaccard_iter = pool.imap(compute_jaccard_partial, lshcache.bins)
+        # compute jaccards of buckets in bin in parallel (parallelism
+        # limited to # of bins)
+        num_bins = len(lshcache.bins)
+        pool = multiprocessing.Pool(num_bins)
+        compute_jaccard_partial = partial(compute_jaccard, num_bins=num_bins, \
+            start_time_local=start_time)
+        # don't need to pass args and url_doc as they are already shared
+        compute_jaccard_iter = pool.imap(compute_jaccard_partial, lshcache.bins)
 
-    print("multiprocessing init took {:.2f}".format(time.time() - start_time),\
-        flush=True)
-    for remove_urls_list, deduped_local, counter_local in compute_jaccard_iter:
-        deduped += deduped_local
-        counter += counter_local
-        write_remove_urls_list(remove_urls_list, f_out)
-        print(' [write]> processed {} documents in {:.2f} '
-            'seoncds and deduped {} documents ...'.format(counter, time.time()\
-            - start_time, deduped), flush=True)
+        print("multiprocessing init took {:.2f}".format(time.time() - start_time),\
+            flush=True)
+        for remove_urls_list, deduped_local, counter_local in compute_jaccard_iter:
+            deduped += deduped_local
+            counter += counter_local
+            write_remove_urls_list(remove_urls_list, f_out)
+            print(' [write]> processed {} documents in {:.2f} '
+                'seoncds and deduped {} documents ...'.format(counter, time.time()\
+                - start_time, deduped), flush=True)
 
-    pool.close()
-    pool.join()
-    f_out.close()
-
+        pool.close()
+        pool.join()
     print(' Taken time for jaccard similariries {:.2f} seconds'.format(\
         time.time() - start_time), flush=True)
 
 def find_pair_urls_sequential(args, lshcache, url_doc):
     start_time = time.time()
-    f_out = open(args.output, 'wb')
-    deduped, counter = 0, 0
-    for b in lshcache.bins:
-        for bucket_id in b:
-            if len(b[bucket_id]) <= 1:
-                continue
+    with open(args.output, 'wb') as f_out:
+        deduped, counter = 0, 0
+        for b in lshcache.bins:
+            for bucket_id in b:
+                if len(b[bucket_id]) <= 1:
+                    continue
 
-            bucket_urls = b[bucket_id].copy()
-            remove_urls_list_sub, deduped_local_sub, counter_local_sub = \
-                url_pairs_to_remove(args, bucket_urls, url_doc)
+                bucket_urls = b[bucket_id].copy()
+                remove_urls_list_sub, deduped_local_sub, counter_local_sub = \
+                    url_pairs_to_remove(args, bucket_urls, url_doc)
 
-            deduped += deduped_local_sub
-            counter += counter_local_sub
-            write_remove_urls_list(remove_urls_list_sub, f_out)
-            if counter % 10000 == 0:
-                print(' [write]> processed {} documents in {:.2f} '
-                    'seoncds and deduped {} documents ...'.
-                    format(counter, time.time() - start_time,
-                    deduped), flush=True)
-    f_out.close()
+                deduped += deduped_local_sub
+                counter += counter_local_sub
+                write_remove_urls_list(remove_urls_list_sub, f_out)
+                if counter % 10000 == 0:
+                    print(' [write]> processed {} documents in {:.2f} '
+                        'seoncds and deduped {} documents ...'.
+                        format(counter, time.time() - start_time,
+                        deduped), flush=True)
     print(' [write]> processed {} documents in {:.2f} '
         'seoncds and deduped {} documents ...'.
         format(counter, time.time() - start_time,
@@ -237,20 +233,18 @@ if __name__ == '__main__':
         for count_fp, fp_file_name in enumerate(args.load_fingerprints):
             print("Loading fingerprints from pickle file {}".format(
                 fp_file_name), flush=True)
-            fp = open(fp_file_name, "rb")
-            if count_fp == 0:
-                # assign directory for the first pkl
-                lshcache = pickle.load(fp)
-                url_doc = pickle.load(fp)
-            else:
-                # append these to lshcache and url_doc
-                local_lshcache = pickle.load(fp)
-                local_url_doc = pickle.load(fp)
-                for url in local_lshcache.fingerprints.keys():
-                    url_doc[url] = local_url_doc[url]
-                    lshcache.add_fingerprint(local_lshcache.fingerprints[url], url)
-            fp.close()
-
+            with open(fp_file_name, "rb") as fp:
+                if count_fp == 0:
+                    # assign directory for the first pkl
+                    lshcache = pickle.load(fp)
+                    url_doc = pickle.load(fp)
+                else:
+                    # append these to lshcache and url_doc
+                    local_lshcache = pickle.load(fp)
+                    local_url_doc = pickle.load(fp)
+                    for url in local_lshcache.fingerprints.keys():
+                        url_doc[url] = local_url_doc[url]
+                        lshcache.add_fingerprint(local_lshcache.fingerprints[url], url)
     counter = 0
     start_time = time.time()
 
@@ -259,29 +253,28 @@ if __name__ == '__main__':
     if args.inputs is not None:
         print("Computing fingerprints", flush=True)
         assert len(args.inputs) % 2 == 0
+        # compute fingerprints in parallel
+        num_workers = 40
         for input_file, key in zip(args.inputs[::2], args.inputs[1::2]):
             print(' document processing {} with key {}'.format(input_file, key),
                 flush=True)
 
-            # compute fingerprints in parallel
-            num_workers = 40
             pool = multiprocessing.Pool(num_workers)
-            fin = open(input_file, 'r', encoding='utf-8')
-            compute_fingerprint_partial = partial(compute_fingerprint, key=key)
-            compute_fingerprint_iter = pool.imap(compute_fingerprint_partial,
-                                                    fin, 512)
-            # traverse all the texts and add fingerprints
-            for url, text, fingerprint, flag in compute_fingerprint_iter:
-                counter += 1
-                if flag:
-                    url_doc[url] = text
-                    lshcache.add_fingerprint(fingerprint, url)
-                if counter % 10000 == 0:
-                    print(' [read]> processed {} documents in {:.2f} '
-                        'seconds ...'.format(counter, time.time() - \
-                        start_time), flush=True)
+            with open(input_file, 'r', encoding='utf-8') as fin:
+                compute_fingerprint_partial = partial(compute_fingerprint, key=key)
+                compute_fingerprint_iter = pool.imap(compute_fingerprint_partial,
+                                                        fin, 512)
+                # traverse all the texts and add fingerprints
+                for url, text, fingerprint, flag in compute_fingerprint_iter:
+                    counter += 1
+                    if flag:
+                        url_doc[url] = text
+                        lshcache.add_fingerprint(fingerprint, url)
+                    if counter % 10000 == 0:
+                        print(' [read]> processed {} documents in {:.2f} '
+                            'seconds ...'.format(counter, time.time() - \
+                            start_time), flush=True)
 
-            fin.close()
             pool.close()
             pool.join()
 

@@ -92,7 +92,7 @@ def average_losses_across_data_parallel_group(losses):
 
 def report_memory(name):
     """Simple GPU memory report."""
-    mega_bytes = 1024.0 * 1024.0
+    mega_bytes = 1024.0**2
     string = name + ' memory (MB)'
     string += ' | allocated: {}'.format(
         torch.cuda.memory_allocated() / mega_bytes)
@@ -155,10 +155,7 @@ def get_ltor_masks_and_position_ids(data,
     micro_batch_size, seq_length = data.size()
 
     # Attention mask (lower triangular).
-    if reset_attention_mask:
-        att_mask_batch = micro_batch_size
-    else:
-        att_mask_batch = 1
+    att_mask_batch = micro_batch_size if reset_attention_mask else 1
     attention_mask = torch.tril(torch.ones(
         (att_mask_batch, seq_length, seq_length), device=data.device)).view(
             att_mask_batch, 1, seq_length, seq_length)

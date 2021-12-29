@@ -150,8 +150,7 @@ def build_training_sample(sample,
     tokens_np, tokentypes_np, labels_np, padding_mask_np, loss_mask_np \
         = pad_and_convert_to_numpy(tokens, tokentypes, masked_positions,
                                    masked_labels, pad_id, max_seq_length)
-    #print_rank_0("token_np.shape:{}".format(tokens_np.shape)) 
-    train_sample = {
+    return {
         'text': tokens_np,
         'types': tokentypes_np,
         'labels': labels_np,
@@ -159,7 +158,6 @@ def build_training_sample(sample,
         'loss_mask': loss_mask_np,
         'padding_mask': padding_mask_np,
         'truncated': int(truncated)}
-    return train_sample
 
 
 def pad_and_convert_to_numpy(tokens, tokentypes, masked_positions,

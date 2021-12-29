@@ -53,10 +53,8 @@ def get_model_provider(eval_metric):
                                       'is not supported.'.format(eval_metric))
 
         print_rank_0('building GPT model ...')
-        model = GPTModel(num_tokentypes=0, parallel_output=parallel_output,
+        return GPTModel(num_tokentypes=0, parallel_output=parallel_output,
                          pre_process=pre_process, post_process=post_process)
-
-        return model
 
     return model_provider
 
@@ -108,9 +106,8 @@ def forward_step(batch, model, eval_metric):
         if eval_metric == 'loss':
             losses = mpu.vocab_parallel_cross_entropy(
                 output.contiguous().float(), labels.contiguous())
-            loss = torch.sum(
+            return torch.sum(
                 losses.view(-1) * loss_mask.contiguous().view(-1).float())
-            return loss
 
         # For accuracy, return the number of correctly predicted samples.
         if eval_metric == 'accuracy':

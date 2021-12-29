@@ -23,7 +23,7 @@ def update_level(i):
 
 
 batch_size = 32
-num_dataset = 32 if batch_size >= 32 else batch_size
+num_dataset = min(batch_size, 32)
 num_range = batch_size//num_dataset
 num_repeat = 4
 
@@ -47,8 +47,7 @@ def temp(index):
             continue
         else:
             return None
-    else:
-        return 1
+    return 1
 
 for index in tqdm(range(start//num_repeat, end//num_repeat)):
     if temp(index):

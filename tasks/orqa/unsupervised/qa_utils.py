@@ -92,18 +92,16 @@ def check_answer(questions_answers_docs, tokenizer, match_type) -> List[bool]:
     global dpr_all_documents
     hits = []
 
-    for i, doc_id in enumerate(doc_ids):
+    for doc_id in doc_ids:
         doc = dpr_all_documents[doc_id]
         text = doc[0]
 
-        answer_found = False
         if text is None:  # cannot find the document for some reason
             logger.warning("no doc in db")
             hits.append(False)
             continue
 
-        if has_answer(answers, text, tokenizer, match_type):
-            answer_found = True
+        answer_found = bool(has_answer(answers, text, tokenizer, match_type))
         hits.append(answer_found)
     return hits
 
@@ -126,7 +124,7 @@ def has_answer(answers, text, tokenizer, match_type) -> bool:
             single_answer = tokenizer.tokenize(single_answer)
             single_answer = single_answer.words(uncased=True)
 
-            for i in range(0, len(text) - len(single_answer) + 1):
+            for i in range(len(text) - len(single_answer) + 1):
                 if single_answer == text[i: i + len(single_answer)]:
                     return True
 

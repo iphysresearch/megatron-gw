@@ -32,7 +32,13 @@ def save_hdf5(train_waveform, fdir, h5_fn):
     f_data = h5py.File(p / h5_fn, 'w')
     for i in train_waveform.keys():
         data_name = i
-        f_data.create_dataset(data_name, data=train_waveform[i], compression='gzip', compression_opts=9)
+        f_data.create_dataset(
+            data_name,
+            data=train_waveform[data_name],
+            compression='gzip',
+            compression_opts=9,
+        )
+
     f_data.close()
     t_end = time()
     print("{} saved, used ".format(h5_fn) + strftime('%M:%S', localtime(t_end - t_start)))
@@ -118,8 +124,7 @@ def wfdt_init_wraper(num, wfd, duration=8):
         ToTensor(),
     ])
 
-    # waveform dataset using Torch, "wfdt"
-    wfdt = WaveformDatasetTorch(wfd, num=num,
+    return WaveformDatasetTorch(wfd, num=num,
                                 start_time=start_time,
                                 geocent_time=geocent_time,
                                 target_optimal_snr_tuple=target_optimal_snr_tuple,
@@ -130,7 +135,6 @@ def wfdt_init_wraper(num, wfd, duration=8):
                                 rand_transform_data=rand_transform_data,
                                 classification_ornot=classification_ornot,
                                 denoising_ornot=denoising_ornot)
-    return wfdt
 
 
 def generate_data(wfdt, loader, h5_dir, psd_dir, psd_num, loop_num, type):
@@ -139,11 +143,10 @@ def generate_data(wfdt, loader, h5_dir, psd_dir, psd_num, loop_num, type):
         for index in range(psd_num):
             wfdt.wfd.dets['H1'].load_asd_or_psd_file(asd_file='{}psd-{}.txt'.format(psd_dir, index))
             wfdt.update()  # dynamic update our prior in loader.
-            for _, (data, signal, noise, param) in enumerate(loader):
+            for data, signal, noise, param in loader:
                 train_waveform['clean'] = signal.numpy()
                 train_waveform['noisy'] = data.numpy()
                 train_waveform['params'] = param.numpy()
-                # #  shape :[num, 1, 32768]
             #                                                       #    loop-index_psd-index
             h5_fn = type + "-{}_{}.hdf5".format(int(j+1), int(index+1))  # ex : train-5_10
             save_hdf5(train_waveform, h5_dir, h5_fn)
@@ -197,14 +200,6 @@ def main():
     if type not in ['train', 'test', 'valid']:
         raise Exception('wrong type', type)
 
-    if type == 'train':
-        waveform_num_per_file = 10000
-        loop_num = 5
-        h5_dir = './bigdata/'
-        read_psd = False
-        psd_num = 10
-        psd_dir = '../psds/'
-
     if type == 'test':
         waveform_num_per_file = 100
         loop_num = 1
@@ -214,7 +209,15 @@ def main():
         psd_dir = '../psds/'
         psd_num = get_psd_num(psd_dir)
 
-    if type == 'valid':
+    elif type == 'train':
+        waveform_num_per_file = 10000
+        loop_num = 5
+        h5_dir = './bigdata/'
+        read_psd = False
+        psd_num = 10
+        psd_dir = '../psds/'
+
+    elif type == 'valid':
         waveform_num_per_file = 100
         loop_num = 1
         h5_dir = './valid/'

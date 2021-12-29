@@ -109,7 +109,7 @@ def process_single_datapath(datapath, tokenizer, max_qa_length, max_seq_length):
                         qa_ids = tokenizer.tokenize(qa)
                         # Trim if needed.
                         if len(qa_ids) > max_qa_length:
-                            qa_ids = qa_ids[0:max_qa_length]
+                            qa_ids = qa_ids[:max_qa_length]
 
                         # Build the sample.
                         ids, types, paddings \

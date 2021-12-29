@@ -53,8 +53,7 @@ class VitMlpHead(MegatronModule):
         hidden_state = hidden_states[:, sequence_index, :]
         dense_in_result = self.dense_in(hidden_state)
         tanh_result = torch.tanh(dense_in_result)
-        dense_out_result = self.dense_out(tanh_result)
-        return dense_out_result
+        return self.dense_out(tanh_result)
 
 
 def twod_interpolate_position_embeddings_hook(
@@ -106,7 +105,7 @@ def twod_interpolate_position_embeddings_hook(
             )
 
             input_param_grid = input_param_grid.half()
-            input_param_grid = input_param_grid.reshape((-1, gs_new * gs_new))
+            input_param_grid = input_param_grid.reshape((-1, gs_new**2))
             input_param_grid = input_param_grid.transpose(0, 1).contiguous()
 
             assert input_param_grid.shape[1] == hidden_size

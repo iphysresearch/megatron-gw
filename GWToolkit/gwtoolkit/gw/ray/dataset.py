@@ -407,14 +407,14 @@ class RayDataset():
                 optimal_snr=np.asarray(self.target_optimal_snr),
                 matched_filter_snr=np.asarray(matched_filter_snr),
             ))
-            return signal * alpha, self.wfd.parameters
         else:
             optimal_snr, matched_filter_snr = self.calc_SNR(alpha, asd)
             self.wfd.parameters.update(dict(
                 optimal_snr=np.asarray(optimal_snr),
                 matched_filter_snr=np.asarray(matched_filter_snr),
             ))
-            return signal * alpha, self.wfd.parameters
+
+        return signal * alpha, self.wfd.parameters
 
     def onesample(self, level):
         self.update_waveforms()  # update waveforms and noises in level 1
@@ -510,8 +510,7 @@ class RayDataset():
         # pipe = ds.window(blocks_per_window=3).repeat(5)#.random_shuffle_each_window()
         # pipe = ds.window(blocks_per_window=2).repeat(num_repeat).foreach_window(lambda w: w.random_shuffle())  # .random_shuffle_each_window()
         pipe = ds.repeat(num_repeat)  #.foreach_window(lambda x: )  # .random_shuffle_each_window()
-        iterable_dataset = self.to_torch(pipe, batch_size=batch_size)
-        return iterable_dataset
+        return self.to_torch(pipe, batch_size=batch_size)
 
     def pipe_update_waveforms(self, x):
         self.update_waveforms()  # update waveforms and noises in level 1
@@ -629,9 +628,7 @@ class RayDatasetTorch():
         # pipe = ds.window(blocks_per_window=2).repeat(num_repeat).foreach_window(lambda w: w.random_shuffle())  # .random_shuffle_each_window()
 
         pipe = ds.repeat(num_repeat).foreach_window(lambda x: x.map(self.shulffle_geocent_time))  # .random_shuffle_each_window()
-        # return pipe
-        iterable_dataset = self.to_torch(pipe, batch_size=batch_size)
-        return iterable_dataset
+        return self.to_torch(pipe, batch_size=batch_size)
 
     def to_torch(self, pipe, batch_size, batch_format='native', prefetch_blocks=0, drop_last=False):
         """

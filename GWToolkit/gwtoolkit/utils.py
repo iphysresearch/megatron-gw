@@ -29,8 +29,7 @@ def json_store(data, filename):
 # load json data from file
 def json_load(filename):
     with open(filename,'r') as f:
-        data = json.load(f)
-        return data
+        return json.load(f)
 
 
 def ffname(path, pat):

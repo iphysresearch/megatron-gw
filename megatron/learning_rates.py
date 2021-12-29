@@ -100,7 +100,7 @@ class AnnealingLR(object):
 
 
     def state_dict(self):
-        state_dict = {
+        return {
             'max_lr': self.max_lr,
             'warmup_steps': self.warmup_steps,
             'num_steps': self.num_steps,
@@ -108,7 +108,6 @@ class AnnealingLR(object):
             'decay_steps': self.decay_steps,
             'min_lr': self.min_lr
         }
-        return state_dict
 
 
     def _check_and_set(self, cls_value, sd_value, name):
@@ -129,13 +128,10 @@ class AnnealingLR(object):
 
     def load_state_dict(self, sd):
 
-        if 'start_lr' in sd:
-            max_lr_ = sd['start_lr']
-        else:
-            max_lr_ = sd['max_lr']
+        max_lr_ = sd['start_lr'] if 'start_lr' in sd else sd['max_lr']
         self.max_lr = self._check_and_set(self.max_lr, max_lr_,
                                           'learning rate')
-        
+
         self.min_lr = self._check_and_set(self.min_lr, sd['min_lr'],
                                           'minimum learning rate')
 
@@ -147,18 +143,12 @@ class AnnealingLR(object):
                                                 warmup_steps_,
                                                 'warmup iterations')
 
-        if 'end_iter' in sd:
-            decay_steps_ = sd['end_iter']
-        else:
-            decay_steps_ = sd['decay_steps']
+        decay_steps_ = sd['end_iter'] if 'end_iter' in sd else sd['decay_steps']
         self.decay_steps = self._check_and_set(self.decay_steps, decay_steps_,
                                                'total number of iterations')
         self.decay_style = self._check_and_set(self.decay_style,
                                                sd['decay_style'],
                                                'decay style')
 
-        if 'num_iters' in sd:
-            num_steps = sd['num_iters']
-        else:
-            num_steps = sd['num_steps']
+        num_steps = sd['num_iters'] if 'num_iters' in sd else sd['num_steps']
         self.step(increment=num_steps)

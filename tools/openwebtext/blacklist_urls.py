@@ -212,9 +212,7 @@ extentions_blacklist = (
 )
 
 def extention_is_in_blacklist(url):
-    if url.split('?')[0].lower().endswith(extentions_blacklist):
-        return True
-    return False
+    return bool(url.split('?')[0].lower().endswith(extentions_blacklist))
 
 
 # Malformed urls.

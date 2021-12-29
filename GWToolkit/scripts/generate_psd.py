@@ -51,8 +51,7 @@ class PSD_Sampler(object):
         # sample is interval middle point
         noise_times = self.noise_timeline.sample(delta_t=delta_t, dq_bits=self.dq_bits,
                                                  inj_bits=self.inj_bits, return_paths=False)
-        start = noise_times - delta_t
-        return start
+        return noise_times - delta_t
 
     def generate_psd(self, start, ifo='H1', signal_length=8):
 

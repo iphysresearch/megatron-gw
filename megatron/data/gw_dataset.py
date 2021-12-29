@@ -59,13 +59,11 @@ class GwDataset(torch.utils.data.Dataset):
             start = int(ind * self.step * self.fs)
             noisy_input[ind] = noisy_np[0, start:start + self.step_samples]
             clean_input[ind] = clean_np[0, start:start + self.step_samples]
-        
-        train_sample = {
+
+        return {
             'noisy_signal': noisy_input,
             'clean_signal': clean_input,
             'params': param_np}
-
-        return train_sample
 
 def get_samples(data_prefix, name):
     # This should be a barrier but nccl barrier assumes
@@ -78,16 +76,15 @@ def get_samples(data_prefix, name):
         torch.distributed.get_world_size() //
         torch.distributed.get_world_size(group=mpu.get_tensor_model_parallel_group()))
 
+    dataset = {}
     if name in ["valid", "test"]:
         data_path = os.path.join(data_prefix, name + '.hdf5')
         f_data = h5py.File(data_path, 'r')
-        dataset = {}
         for data_name in ['noisy', 'clean']:
             dataset[data_name] = f_data[data_name][:, :, :]
         dataset['params'] = f_data['params'][:, :]
         f_data.close()
     else:
-        dataset = {}
         for i in range(1, 2): #11):
             #data_path = os.path.join(data_prefix, "{}-{}.hdf5".format(name, i))
             data_path = os.path.join(data_prefix, "{}.hdf5".format(name))

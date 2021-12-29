@@ -228,12 +228,21 @@ def get_model(model_provider_func):
 
     # Print number of parameters.
     if mpu.get_data_parallel_rank() == 0:
-        print(' > number of parameters on (tensor, pipeline) '
-              'model parallel rank ({}, {}): {}'.format(
-            mpu.get_tensor_model_parallel_rank(),
-            mpu.get_pipeline_model_parallel_rank(),
-            sum([sum([p.nelement() for p in model_module.parameters()])
-                 for model_module in model])), flush=True)
+        print(
+            (
+                ' > number of parameters on (tensor, pipeline) '
+                'model parallel rank ({}, {}): {}'.format(
+                    mpu.get_tensor_model_parallel_rank(),
+                    mpu.get_pipeline_model_parallel_rank(),
+                    sum(
+                        sum(p.nelement() for p in model_module.parameters())
+                        for model_module in model
+                    ),
+                )
+            ),
+            flush=True,
+        )
+
 
     # GPU allocation.
     for model_module in model:
@@ -291,7 +300,7 @@ def get_learning_rate_scheduler(optimizer):
         raise Exception(
             'either train-iters or train-samples should be provided.')
 
-    lr_scheduler = AnnealingLR(
+    return AnnealingLR(
         optimizer,
         max_lr=args.lr,
         min_lr=args.min_lr,
@@ -300,8 +309,6 @@ def get_learning_rate_scheduler(optimizer):
         decay_style=args.lr_decay_style,
         use_checkpoint_lr_scheduler=args.use_checkpoint_lr_scheduler,
         override_lr_scheduler=args.override_lr_scheduler)
-
-    return lr_scheduler
 
 
 def setup_model_and_optimizer(model_provider_func):
@@ -651,11 +658,7 @@ def train(forward_step_func, model, optimizer, lr_scheduler,
 
         # Logging.
         loss_scale = optimizer.get_loss_scale().item()
-        params_norm = None
-        if args.log_params_norm:
-            params_norm = calc_params_l2_norm(model)
-        
-
+        params_norm = calc_params_l2_norm(model) if args.log_params_norm else None
         #print_rank_0("rank 0: finish calculate l2 norm")
         #print_rank_last("rank last: finish calculate l2 norm")
         report_memory_flag = training_log(loss_dict, total_loss_dict,
@@ -719,9 +722,9 @@ def train(forward_step_func, model, optimizer, lr_scheduler,
             torch.distributed.barrier()
             print_datetime('exiting program at iteration {}'.format(iteration))
             sys.exit()
-            
-        #print_rank_0("rank 0: finish iteration {}".format(iteration-1))
-        #print_rank_last("rank last: finish iteration {}".format(iteration-1))
+                
+            #print_rank_0("rank 0: finish iteration {}".format(iteration-1))
+            #print_rank_last("rank last: finish iteration {}".format(iteration-1))
 
     return iteration
 
@@ -763,8 +766,8 @@ def evaluate(forward_step_func, data_iterator, model, verbose=False):
     for model_module in model:
         model_module.train()
 
-    for key in total_loss_dict:
-        total_loss_dict[key] /= args.eval_iters * get_num_microbatches()
+    for key, value in total_loss_dict.items():
+        value /= args.eval_iters * get_num_microbatches()
 
     return total_loss_dict
 
@@ -831,8 +834,7 @@ def test_and_print_results(prefix, forward_step_func,
 
 def cyclic_iter(iter):
     while True:
-        for x in iter:
-            yield x
+        yield from iter
 
 def build_train_valid_test_data_iterators(
         build_train_valid_test_datasets_provider):
@@ -858,10 +860,7 @@ def build_train_valid_test_data_iterators(
     if mpu.get_tensor_model_parallel_rank() == 0:
 
         # Number of train/valid/test samples.
-        if args.train_samples:
-            train_samples = args.train_samples
-        else:
-            train_samples = args.train_iters * args.global_batch_size
+        train_samples = args.train_samples or args.train_iters * args.global_batch_size
         eval_iters = (args.train_iters // args.eval_interval + 1) * \
                      args.eval_iters
         test_iters = args.eval_iters

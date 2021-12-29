@@ -73,14 +73,12 @@ class DatasetTorchRedis(torch.utils.data.Dataset):
         mask = np.zeros(self.duration * self.sampling_frequency)
         mask[mask_np[0]: mask_np[1]] = 1
 
-        train_sample = {
+        return {
             'noisy_signal': noisy_input,
             'clean_signal': clean_input,
             'mask': self.patching(mask[np.newaxis, ...]),
             'params': param_np
             }
-
-        return train_sample
 
     def fromRedis(self, name):
         """Retrieve Numpy array from Redis key 'n'"""
@@ -224,9 +222,7 @@ class DatasetTorchRealEvent(torch.utils.data.Dataset):
         time = self.cut_from_long(self.time_valid)
         if len(data) == self.duration_long * self.sampling_frequency:
             data = self.cut_from_long(data)
-        elif len(data) == self.duration * self.sampling_frequency:
-            pass
-        else:
+        elif len(data) != self.duration * self.sampling_frequency:
             raise
         return data[(time > self.target_time - 0.1) & (time < self.target_time + 0.05)]
 

@@ -48,13 +48,10 @@ def post_language_model_processing(lm_output, labels, logit_weights,
 
     if labels is None:
         return output
-    else:
-        if fp16_lm_cross_entropy:
-            assert output.dtype == torch.half
-            loss = mpu.vocab_parallel_cross_entropy(output, labels)
-        else:
-            loss = mpu.vocab_parallel_cross_entropy(output.float(), labels)
-        return loss
+    if not fp16_lm_cross_entropy:
+        return mpu.vocab_parallel_cross_entropy(output.float(), labels)
+    assert output.dtype == torch.half
+    return mpu.vocab_parallel_cross_entropy(output, labels)
 
 
 class GPTModel(MegatronModule):
@@ -114,10 +111,12 @@ class GPTModel(MegatronModule):
     def state_dict_for_save_checkpoint(self, destination=None, prefix='',
                                        keep_vars=False):
 
-        state_dict_ = {}
-        state_dict_[self._language_model_key] \
-            = self.language_model.state_dict_for_save_checkpoint(
-                destination, prefix, keep_vars)
+        state_dict_ = {
+            self._language_model_key: self.language_model.state_dict_for_save_checkpoint(
+                destination, prefix, keep_vars
+            )
+        }
+
         # Save word_embeddings.
         if self.post_process and not self.pre_process:
             state_dict_[self._word_embeddings_for_head_key] \

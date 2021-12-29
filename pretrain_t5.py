@@ -36,9 +36,8 @@ def model_provider(pre_process=True, post_process=True):
     assert pre_process and post_process, "T5 doesn't yet support pipelining"
 
     print_rank_0('building T5 model ...')
-    model = T5Model(num_tokentypes=0,
+    return T5Model(num_tokentypes=0,
                     parallel_output=True)
-    return model
 
 
 def get_batch(data_iterator):
@@ -49,10 +48,7 @@ def get_batch(data_iterator):
     datatype = torch.int64
 
     # Broadcast data.
-    if data_iterator is not None:
-        data = next(data_iterator)
-    else:
-        data = None
+    data = next(data_iterator) if data_iterator is not None else None
     data_b = mpu.broadcast_data(keys, data, datatype)
 
     # Unpack.

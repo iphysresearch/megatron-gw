@@ -43,10 +43,7 @@ class IndexBuilder(object):
         """
         Load the necessary attributes: model, dataloader and empty BlockData
         """
-        only_context_model = True
-        if self.biencoder_shared_query_context_model:
-            only_context_model = False
-
+        only_context_model = not self.biencoder_shared_query_context_model
         model = get_model(get_model_provider(only_context_model=\
             only_context_model, biencoder_shared_query_context_model=\
             self.biencoder_shared_query_context_model))

@@ -36,14 +36,12 @@ from megatron.utils import average_losses_across_data_parallel_group
 def pretrain_ict_model_provider(pre_process=True, post_process=True):
     args = get_args()
 
-    model = biencoder_model_provider(
+    return biencoder_model_provider(
                 only_context_model=False,
                 only_query_model=False,
                 biencoder_shared_query_context_model=\
                 args.biencoder_shared_query_context_model,
                 pre_process=pre_process, post_process=post_process)
-
-    return model
 
 def get_group_world_size_rank():
 
@@ -65,9 +63,7 @@ class AllgatherFromDataParallelRegion(torch.autograd.Function):
         tensor_list[rank] = input_
         torch.distributed.all_gather(tensor_list, input_, group=group)
 
-        output = torch.cat(tensor_list, dim=0).contiguous()
-
-        return output
+        return torch.cat(tensor_list, dim=0).contiguous()
 
 
     @staticmethod
@@ -78,9 +74,7 @@ class AllgatherFromDataParallelRegion(torch.autograd.Function):
         dim_size = grad_output.shape[0] // world_size
         output_list = torch.split(grad_output, dim_size, dim=0)
 
-        # get chunk from this rank
-        output = output_list[rank].contiguous()
-        return output
+        return output_list[rank].contiguous()
 
 def loss_func(output_tensor):
     args = get_args()
@@ -107,8 +101,17 @@ def loss_func(output_tensor):
                                     k=softmax_scores.shape[1], sorted=True)
 
     def topk_accuracy(k):
-        return torch.cuda.FloatTensor([sum([int(i in sorted_indices[i, :k]) \
-            for i in range(global_batch_size)]) / global_batch_size])
+        return torch.cuda.FloatTensor(
+            [
+                (
+                    sum(
+                        int(i in sorted_indices[i, :k])
+                        for i in range(global_batch_size)
+                    )
+                    / global_batch_size
+                )
+            ]
+        )
 
     topk_accs = [topk_accuracy(int(k)) for k in args.retriever_report_topk_accuracies]
 

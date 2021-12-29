@@ -98,7 +98,7 @@ class MegatronPretrainingSampler:
                 batch = []
 
         # Check the last partial batch and see drop_last is set
-        if len(batch) > 0 and not self.drop_last:
+        if batch and not self.drop_last:
             start_idx, end_idx = self.get_start_end_idx()
             yield batch[start_idx:end_idx]
 

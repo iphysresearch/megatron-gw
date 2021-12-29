@@ -20,7 +20,7 @@ class OpenRetreivalDataStore(object):
     embeddings and necessary metadata for Retriever
     """
     def __init__(self, embedding_path=None, load_from_path=True, rank=None):
-        self.embed_data = dict()
+        self.embed_data = {}
         if embedding_path is None:
             args = get_args()
             embedding_path = args.embedding_path
@@ -45,7 +45,7 @@ class OpenRetreivalDataStore(object):
         The metadata ends up getting used, and is also much smaller in
         dimensionality so it isn't really worth clearing.
         """
-        self.embed_data = dict()
+        self.embed_data = {}
 
     def load_from_file(self):
         """Populate members from instance saved to file"""
@@ -214,11 +214,8 @@ class FaissMIPSIndex(object):
         query_embeds = np.float32(detach(query_embeds))
 
         if reconstruct:
-            # get the vectors themselves
-            top_k_block_embeds = self.mips_index.search_and_reconstruct(\
+            return self.mips_index.search_and_reconstruct(\
                 query_embeds, top_k)
-            return top_k_block_embeds
-        else:
-            # get distances and indices of closest vectors
-            distances, block_indices = self.mips_index.search(query_embeds, top_k)
-            return distances, block_indices
+        # get distances and indices of closest vectors
+        distances, block_indices = self.mips_index.search(query_embeds, top_k)
+        return distances, block_indices

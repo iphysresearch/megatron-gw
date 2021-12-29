@@ -668,9 +668,7 @@ class ParallelTransformer(MegatronModule):
                 presents = []
             for index in range(self.num_layers):
                 layer = self._get_layer(index)
-                past = None
-                if layer_past is not None:
-                    past = layer_past[index]
+                past = layer_past[index] if layer_past is not None else None
                 hidden_states = layer(hidden_states,
                                       attention_mask,
                                       encoder_output=encoder_output,

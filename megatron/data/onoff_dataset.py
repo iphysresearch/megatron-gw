@@ -120,11 +120,10 @@ class OnsourceDataset(torch.utils.data.Dataset):
             #clean_input[ind] = clean_np[0, start_idx:start_idx + self.step_samples]
 
         params = np.reshape(np.array(start_time, dtype='float64'), [1, -1])
-        train_sample = {
+        return {
             'noisy_signal': noisy_input,
             'clean_signal': clean_input,
             'params': params}
-        return train_sample
         # return self.data[idx]
 
     def update(self):
@@ -242,9 +241,7 @@ class OffsourceDataset(torch.utils.data.Dataset):
             params = np.append(params, self.wfd.parameters[key])
         params = np.reshape(params, [1, -1])
 
-        train_sample = {
+        return {
             'noisy_signal': noisy_input,
             'clean_signal': clean_input,
             'params': params}
-
-        return train_sample

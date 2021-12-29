@@ -83,10 +83,7 @@ def ensure_directory_exists(filename):
 def get_checkpoint_name(checkpoints_path, iteration,
                         release=False):
     """A unified checkpoint name."""
-    if release:
-        directory = 'release'
-    else:
-        directory = 'iter_{:07d}'.format(iteration)
+    directory = 'release' if release else 'iter_{:07d}'.format(iteration)
     # Use both the tensor and pipeline MP rank.
     if mpu.get_pipeline_model_parallel_world_size() == 1:
         return os.path.join(checkpoints_path, directory,
@@ -119,10 +116,7 @@ def save_checkpoint(iteration, model, optimizer, lr_scheduler):
     if not torch.distributed.is_initialized() or mpu.get_data_parallel_rank() == 0:
 
         # Arguments, iteration, and model.
-        state_dict = {}
-        state_dict['args'] = args
-        state_dict['checkpoint_version'] = 3.0
-        state_dict['iteration'] = iteration
+        state_dict = {'args': args, 'checkpoint_version': 3.0, 'iteration': iteration}
         if len(model) == 1:
             state_dict['model'] = model[0].state_dict_for_save_checkpoint()
         else:
@@ -210,31 +204,33 @@ def fix_query_key_value_ordering(model, checkpoint_version):
     """Fix up query/key/value matrix ordering if checkpoint
     version is smaller than 2.0
     """
-    if checkpoint_version < 2.0:
-        if isinstance(model, list):
-            assert len(model)==1
-            model = model[0]
-        for name, param in model.named_parameters():
-            if name.endswith(('.query_key_value.weight', '.query_key_value.bias')):
-                if checkpoint_version == 0:
-                    fixed_param = _transpose_first_dim(param.data, 3, True, model)
-                elif checkpoint_version == 1.0:
-                    fixed_param = _transpose_first_dim(param.data, 3, False, model)
-                else:
-                    print_rank_0(f"Invalid checkpoint version {checkpoint_version}.")
-                    sys.exit()
-                param.data.copy_(fixed_param)
-            if name.endswith(('.key_value.weight', '.key_value.bias')):
-                if checkpoint_version == 0:
-                    fixed_param = _transpose_first_dim(param.data, 2, True, model)
-                elif checkpoint_version == 1.0:
-                    fixed_param = _transpose_first_dim(param.data, 2, False, model)
-                else:
-                    print_rank_0(f"Invalid checkpoint version {checkpoint_version}.")
-                    sys.exit()
-                param.data.copy_(fixed_param)
-        print_rank_0(" succesfully fixed query-key-values ordering for"
-                    " checkpoint version {}".format(checkpoint_version))
+    if checkpoint_version >= 2.0:
+        return
+
+    if isinstance(model, list):
+        assert len(model)==1
+        model = model[0]
+    for name, param in model.named_parameters():
+        if name.endswith(('.query_key_value.weight', '.query_key_value.bias')):
+            if checkpoint_version == 0:
+                fixed_param = _transpose_first_dim(param.data, 3, True, model)
+            elif checkpoint_version == 1.0:
+                fixed_param = _transpose_first_dim(param.data, 3, False, model)
+            else:
+                print_rank_0(f"Invalid checkpoint version {checkpoint_version}.")
+                sys.exit()
+            param.data.copy_(fixed_param)
+        if name.endswith(('.key_value.weight', '.key_value.bias')):
+            if checkpoint_version == 0:
+                fixed_param = _transpose_first_dim(param.data, 2, True, model)
+            elif checkpoint_version == 1.0:
+                fixed_param = _transpose_first_dim(param.data, 2, False, model)
+            else:
+                print_rank_0(f"Invalid checkpoint version {checkpoint_version}.")
+                sys.exit()
+            param.data.copy_(fixed_param)
+    print_rank_0(" succesfully fixed query-key-values ordering for"
+                " checkpoint version {}".format(checkpoint_version))
 
 def load_checkpoint(model, optimizer, lr_scheduler, load_arg='load', strict=True):
     """Load a model checkpoint and return the iteration.

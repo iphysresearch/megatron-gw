@@ -166,26 +166,25 @@ def generate_samples_input_from_file(model):
                     context_tokens = context_tokens_tensor.cpu().numpy().tolist()
 
             token_stream = get_token_stream(model, [context_tokens])
-            for _, decode_tokens in enumerate(token_stream):
-                pass
+            if (
+                mpu.get_tensor_model_parallel_rank() == 0
+                and mpu.is_pipeline_first_stage()
+            ):
+                os.system('clear')
+                print("\nContext:", raw_text, flush=True)
 
-            if mpu.get_tensor_model_parallel_rank() == 0:
-                if mpu.is_pipeline_first_stage():
-                    os.system('clear')
-                    print("\nContext:", raw_text, flush=True)
+                fname_out.write("\nContext:")
+                fname_out.write(raw_text)
 
-                    fname_out.write("\nContext:")
-                    fname_out.write(raw_text)
+                decode_tokens, _ = decode_tokens
+                decode_tokens = decode_tokens[0].cpu().numpy().tolist()
+                trim_decode_tokens = tokenizer.detokenize(
+                    decode_tokens)[raw_text_len:]
+                print("\nMegatron-LM:", trim_decode_tokens, flush=True)
 
-                    decode_tokens, _ = decode_tokens
-                    decode_tokens = decode_tokens[0].cpu().numpy().tolist()
-                    trim_decode_tokens = tokenizer.detokenize(
-                        decode_tokens)[raw_text_len:]
-                    print("\nMegatron-LM:", trim_decode_tokens, flush=True)
-
-                    fname_out.write("\n\nMegatron-LM:")
-                    fname_out.write(trim_decode_tokens)
-                    fname_out.write("\n")
+                fname_out.write("\n\nMegatron-LM:")
+                fname_out.write(trim_decode_tokens)
+                fname_out.write("\n")
 
             raw_text = None
             context_count += 1
@@ -216,10 +215,8 @@ def generate_samples_eval(model, context, max_gen_length, eos_token_id):
 
     decode_tokens, _ = decode_tokens
     decode_tokens = decode_tokens[0].cpu().numpy().tolist()
-    trim_decode_tokens = tokenizer.detokenize(
+    return tokenizer.detokenize(
         decode_tokens)[raw_text_len:]
- 
-    return trim_decode_tokens
 
 
 def generate_samples_interactive(model, print_frequency=24):
@@ -472,11 +469,7 @@ def sample_sequence_batch(model, context_tokens, context_lengths,
 
         # added eos_id to support the function generate_samples_eval that passes
         # eos_id as an argument and needs termination when that id id found.
-        if hasattr(args, 'eos_id'):
-            eos_id = args.eos_id
-        else:
-            eos_id = tokenizer.eod
-
+        eos_id = args.eos_id if hasattr(args, 'eos_id') else tokenizer.eod
         counter = 0
         org_context_length = context_length
 

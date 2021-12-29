@@ -120,11 +120,11 @@ class DynamicGradScaler(MegatronGradScaler):
 
 
     def state_dict(self):
-        state_dict = {}
-        state_dict['scale'] = self._scale
-        state_dict['growth_tracker'] = self._growth_tracker
-        state_dict['hysteresis_tracker'] = self._hysteresis_tracker
-        return state_dict
+        return {
+            'scale': self._scale,
+            'growth_tracker': self._growth_tracker,
+            'hysteresis_tracker': self._hysteresis_tracker,
+        }
 
 
     def load_state_dict(self, state_dict):

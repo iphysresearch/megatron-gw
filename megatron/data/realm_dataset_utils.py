@@ -43,10 +43,7 @@ def get_ict_batch(data_iterator):
     datatype = torch.int64
 
     # Broadcast data.
-    if data_iterator is None:
-        data = None
-    else:
-        data = next(data_iterator)
+    data = None if data_iterator is None else next(data_iterator)
     data_b = mpu.broadcast_data(keys, data, datatype)
 
     # Unpack.
@@ -62,13 +59,7 @@ def get_ict_batch(data_iterator):
 
 def join_str_list(str_list):
     """Join a list of strings, handling spaces appropriately"""
-    result = ""
-    for s in str_list:
-        if s.startswith("##"):
-            result += s[2:]
-        else:
-            result += " " + s
-    return result
+    return "".join(s[2:] if s.startswith("##") else " " + s for s in str_list)
 
 
 class BlockSampleData(object):
@@ -103,8 +94,7 @@ class BlockSamplesMapping(object):
 
     def __getitem__(self, idx):
         """Get the data associated with an indexed sample."""
-        sample_data = BlockSampleData(*self.mapping_array[idx])
-        return sample_data
+        return BlockSampleData(*self.mapping_array[idx])
 
 
 def get_block_samples_mapping(block_dataset, title_dataset, data_prefix, num_epochs,

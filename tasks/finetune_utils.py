@@ -90,8 +90,7 @@ def build_data_loader(dataset, micro_batch_size, num_workers, drop_last,
     sampler = torch.utils.data.distributed.DistributedSampler(
         dataset, num_replicas=world_size, rank=rank)
 
-    # Data loader. Note that batch size is the per GPU batch size.
-    data_loader = torch.utils.data.DataLoader(dataset,
+    return torch.utils.data.DataLoader(dataset,
                                               batch_size=micro_batch_size,
                                               sampler=sampler,
                                               shuffle=False,
@@ -99,8 +98,6 @@ def build_data_loader(dataset, micro_batch_size, num_workers, drop_last,
                                               drop_last=drop_last,
                                               pin_memory=True,
                                               collate_fn=task_collate_fn)
-
-    return data_loader
 
 
 def _build_infinite_size_dataloader(dataloader):
@@ -199,10 +196,7 @@ def _train(model, optimizer, lr_scheduler, forward_step,
             losses_dict, skipped_iter, grad_norm, num_zeros_in_grad = out
             iteration += 1
 
-            # Logging.
-            params_norm = None
-            if args.log_params_norm:
-                params_norm = calc_params_l2_norm(model)
+            params_norm = calc_params_l2_norm(model) if args.log_params_norm else None
             report_memory_flag = training_log(losses_dict, losses_dict_sum,
                                               optimizer.param_groups[0]['lr'],
                                               iteration,
@@ -307,9 +301,7 @@ def finetune(train_valid_datasets_provider, model_provider,
     if args.epochs > 0:
         _train(model, optimizer, lr_scheduler, forward_step,
                train_dataloader, valid_dataloader, end_of_epoch_callback)
-    # Or just evaluate.
-    else:
-        if end_of_epoch_callback is not None:
-            print_rank_0('evaluation only mode, setting epoch to -1')
-            end_of_epoch_callback(model, epoch=-1, output_predictions=True)
+    elif end_of_epoch_callback is not None:
+        print_rank_0('evaluation only mode, setting epoch to -1')
+        end_of_epoch_callback(model, epoch=-1, output_predictions=True)
     print_rank_0('done :-)')

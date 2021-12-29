@@ -18,7 +18,7 @@ import torch
 
 
 # A dictionary of all the memory buffers allocated.
-_MEM_BUFFS = dict()
+_MEM_BUFFS = {}
 
 
 def allocate_mem_buff(name, numel, dtype, track_usage):

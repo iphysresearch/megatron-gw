@@ -50,8 +50,8 @@ def get_file_paths(directory, extensions=None):
 
     # If a list of extensions is provided, only keep the corresponding files
     if extensions is not None:
-        file_paths = [_ for _ in file_paths if any([_.endswith(ext) for
-                                                    ext in extensions])]
+        file_paths = [_ for _ in file_paths if any(_.endswith(ext) for
+                                                            ext in extensions)]
 
     return file_paths
 
@@ -122,7 +122,7 @@ def get_strain_from_hdf_file(hdf_file_paths,
     sampling_factor = int(original_sampling_rate / target_sampling_rate)
 
     # Store the sample we have selected from the HDF files
-    sample = dict()
+    sample = {}
 
     # Loop over both detectors
     for detector in ('H1', 'L1'):
@@ -155,21 +155,16 @@ def get_strain_from_hdf_file(hdf_file_paths,
     if not as_pycbc_timeseries:
         return sample
 
-    # Otherwise we need to convert the numpy array to a time series first
     else:
 
-        # Initialize an empty dict for the time series results
-        timeseries = dict()
-
-        # Convert strain of both detectors to a TimeSeries object
-        for detector in ('H1', 'L1'):
-
-            timeseries[detector] = \
-                TimeSeries(initial_array=sample[detector],
-                           delta_t=1.0/target_sampling_rate,
-                           epoch=LIGOTimeGPS(gps_time - offset))
-
-        return timeseries
+        return {
+            detector: TimeSeries(
+                initial_array=sample[detector],
+                delta_t=1.0 / target_sampling_rate,
+                epoch=LIGOTimeGPS(gps_time - offset),
+            )
+            for detector in ('H1', 'L1')
+        }
 
 
 # -----------------------------------------------------------------------------
@@ -475,8 +470,8 @@ class NoiseTimeline:
         # ---------------------------------------------------------------------
 
         # Compute the minimum data quality
-        min_dq = sum([2**i for i in dq_bits])
-    
+        min_dq = sum(2**i for i in dq_bits)
+
         # Perform the DQ check for H1
         environment['h1_dq_mask'] = environment['h1_dq_mask'] > min_dq
         if not np.all(environment['h1_dq_mask']):
@@ -496,22 +491,9 @@ class NoiseTimeline:
         # K-th bit is set by evaluating the expression: N & (1 << K)
         ones = np.ones(2 * delta_t, dtype=np.int32)
 
-        # For each requested injection bit, check if it is set for the whole
-        # environment (for both H1 and L1)
-        for i in inj_bits:
 
-            # Perform the injection check for H1
-            if not np.all(np.bitwise_and(environment['h1_inj_mask'],
-                                         np.left_shift(ones, i))):
-                return False
-
-            # # Perform the injection check for L1
-            # if not np.all(np.bitwise_and(environment['l1_inj_mask'],
-            #                              np.left_shift(ones, i))):
-            #     return False
-
-        # If we have not returned False yet, the time must be valid!
-        return True
+        return all(np.all(np.bitwise_and(environment['h1_inj_mask'],
+                                         np.left_shift(ones, i))) for i in inj_bits)
 
     # -------------------------------------------------------------------------
     def _inj_dq_check(self, dqbitmask, injbitmask, length, num_length=1):
@@ -560,8 +542,8 @@ class NoiseTimeline:
         Returns:
             GPS start_time for a valid noise_interval
         """
-        dqbitmask = sum([2**i for i in dq_bits])
-        injbitmask = sum([2**i for i in inj_bits])
+        dqbitmask = sum(2**i for i in dq_bits)
+        injbitmask = sum(2**i for i in inj_bits)
         segment_lefttime_index_time = self._inj_dq_check(dqbitmask, injbitmask, noise_interval, num_length)
         return [self.gps_start_time + i for i in segment_lefttime_index_time]
 
@@ -622,7 +604,7 @@ class NoiseTimeline:
         """
 
         # Keep track of the results, i.e., the paths to the HDF files
-        result = dict()
+        result = {}
 
         # Loop over all HDF files to find the ones containing the given time
         for hdf_file in self.hdf_files:
@@ -637,7 +619,7 @@ class NoiseTimeline:
                 result[hdf_file['detector']] = hdf_file['file_path']
 
             # If both files were found, we are done!
-            if 'H1' in result.keys() and 'L1' in result.keys():
+            if 'H1' in result and 'L1' in result:
                 return result
 
         # If we didn't both files, return None

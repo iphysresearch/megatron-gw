@@ -70,7 +70,7 @@ class Data_utils(object):
         """
         n = np.arange(0, M)
         width = int(np.floor(alpha*(M-1)/2.0))
-        n1 = n[0:width+1]
+        n1 = n[:width+1]
         n2 = n[width+1:M-width-1]
         n3 = n[M-width-1:]
 
@@ -137,8 +137,7 @@ class Data_utils(object):
         #normalize data
         data_1 = data1 / self.get_snr(data1)
         data_2 = data2 / self.get_snr(data2)
-        overlap = self.get_inner_product(data_1,data_2)
-        return overlap
+        return self.get_inner_product(data_1,data_2)
 
 class Glitch_Generator(Data_utils):
     def __init__(self, time_duration, sampling_rate):
@@ -151,42 +150,37 @@ class Glitch_Generator(Data_utils):
     def Gaussian(self,t0,tau,snr):
         tmp1 = ((self.sample_times - t0)**2) / (2*tau**2)
         tmp2 = np.exp(- tmp1)
-        tmp3 = snr * tmp2 / self.get_snr(tmp2)
-        return tmp3
+        return snr * tmp2 / self.get_snr(tmp2)
 
     def Sine_Gaussian(self,f0,t0,Q,snr):
         tau = Q / (np.sqrt(2) * np.pi * f0)
         tmp1 = ((self.sample_times - t0)**2) / (2*tau**2)
         tmp2 = np.sin(2*np.pi*f0*(self.sample_times - t0)) * np.exp(- tmp1)
-        tmp3 = snr * tmp2 / self.get_snr(tmp2)
-        return tmp3
+        return snr * tmp2 / self.get_snr(tmp2)
     
     def Ring_Down(self,f0,t0,Q,snr):
-        index = 0 
+        index = 0
         for idx in range(len(self.sample_times)):
             if self.sample_times[idx] >= t0:
                 index = idx
                 break
         tmp1 = self.Sine_Gaussian(f0,t0,Q,snr)
         tmp1[:index] = 0
-        tmp2 = snr * tmp1 / self.get_snr(tmp1)
-        return tmp2
+        return snr * tmp1 / self.get_snr(tmp1)
     
     def Chrip_like(self,m1,m2,t0,snr):
         m_c = (m1 * m2)**(3/5) / (m1 + m2)**(1/5)
         tau = self.sample_times - t0
         phi = -2 * (5 * C.G * m_c / C.c**3)**(-5/8) * tau**(5/8)
         tmp1 = tau**(-1/4)*np.sin(phi)
-        tmp2 = snr * tmp1 / self.get_snr(tmp1)
-        return tmp2
+        return snr * tmp1 / self.get_snr(tmp1)
 
     def Scattered_light_like(self,f0,tau,t0,K,snr):
         tau_c = self.sample_times - t0
         phi_SL = 2 * np.pi * f0 * tau_c * (1 - K * tau_c**2)
         tmp1 = (tau_c**2) / (2*tau**2)
         tmp2 = np.sin(phi_SL) * np.exp(- tmp1)
-        tmp3 = snr * tmp2 / self.get_snr(tmp2)
-        return tmp3
+        return snr * tmp2 / self.get_snr(tmp2)
 
     def generate_glitchs(self,num,type):
         '''

@@ -217,15 +217,12 @@ class VocabParallelEmbedding(torch.nn.Module):
         #print("input_parallel shape:{}".format(input_parallel.shape))
         #print("weight shape:{}".format(self.weight.shape))
         output_parallel = F.linear(input_parallel, self.weight)
-        #print("output_parallel shape:{}".format(output_parallel.shape))
-        if self.tensor_model_parallel_size>1:
-            # All-gather across the partitions.
-            output = gather_from_tensor_model_parallel_region(output_parallel)
-        else:
-            output = output_parallel
-
         #print("output shape:{}".format(output.shape))
-        return output
+        return (
+            gather_from_tensor_model_parallel_region(output_parallel)
+            if self.tensor_model_parallel_size > 1
+            else output_parallel
+        )
 
         #project_parallel = F.linear(input_.to(self.params_dtype), self.weight.to(self.params_dtype))
         #output = reduce_from_tensor_model_parallel_region(project_parallel)

@@ -123,9 +123,10 @@ def accuracy_func_provider(single_dataset_provider, rank0sampler=False):
             start_time = time.time()
             output = retrieval_loss(model, dataloader)
             stats_dict, total = output
-            format_string = ""
-            for k, v in stats_dict.items():
-                format_string += "|{} = {:.2f}".format(k, v / total)
+            format_string = "".join(
+                "|{} = {:.2f}".format(k, v / total) for k, v in stats_dict.items()
+            )
+
             print_rank_0("epoch:{}{}".format(epoch, format_string))
             print_rank_0("taken time to calcuate metrics {:.3f}".format(\
                 time.time() - start_time))
@@ -178,13 +179,23 @@ def retrieval_loss(model, dataloader):
 
             def topk_accuracy(k):
                 return torch.cuda.FloatTensor(
-                    [sum([int(labels[i] in sorted_indices[i, :k]) for i in \
-                        range(local_batch_size)])])
+                    [
+                        sum(
+                            int(labels[i] in sorted_indices[i, :k])
+                            for i in range(local_batch_size)
+                        )
+                    ]
+                )
 
             def get_rank():
                 return torch.cuda.FloatTensor(
-                    [sum([torch.nonzero(labels[i] == sorted_indices[i])[0][0] \
-                        for i in range(local_batch_size)])])
+                    [
+                        sum(
+                            torch.nonzero(labels[i] == sorted_indices[i])[0][0]
+                            for i in range(local_batch_size)
+                        )
+                    ]
+                )
 
             topk_accs = [topk_accuracy(k) for k in \
                 args.retriever_report_topk_accuracies]

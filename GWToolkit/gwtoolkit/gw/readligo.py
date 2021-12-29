@@ -224,29 +224,25 @@ def read_hdf5(filename, readstrain=True):
     dataFile = h5py.File(filename, 'r')
 
     #-- Read the strain
-    if readstrain:
-        strain = dataFile['strain']['Strain'][...]
-    else:
-        strain = 0
-
+    strain = dataFile['strain']['Strain'][...] if readstrain else 0
     ts = dataFile['strain']['Strain'].attrs['Xspacing']
-    
+
     #-- Read the DQ information
     dqInfo = dataFile['quality']['simple']
     qmask = dqInfo['DQmask'][...]
     shortnameArray = dqInfo['DQShortnames'][()]
     shortnameList  = list(shortnameArray)
-    
+
     # -- Read the INJ information
     injInfo = dataFile['quality/injections']
     injmask = injInfo['Injmask'][...]
     injnameArray = injInfo['InjShortnames'][()]
     injnameList  = list(injnameArray)
-    
+
     #-- Read the meta data
     meta = dataFile['meta']
     gpsStart = meta['GPSstart'][()]    
-    
+
     dataFile.close()
     return strain, gpsStart, ts, qmask, shortnameList, injmask, injnameList
 
@@ -276,22 +272,18 @@ def loaddata(filename, ifo=None, tvec=True, readstrain=True, strain_chan=None, d
     except:
         return None,None,None
 
-    file_ext = os.path.splitext(filename)[1]    
+    file_ext = os.path.splitext(filename)[1]
     if (file_ext.upper() == '.GWF'):
         strain, gpsStart, ts, qmask, shortnameList, injmask, injnameList = read_frame(filename, ifo, readstrain, strain_chan, dq_chan, inj_chan)
     else:
         strain, gpsStart, ts, qmask, shortnameList, injmask, injnameList = read_hdf5(filename, readstrain)
-        
+
     #-- Create the time vector
     gpsEnd = gpsStart + len(qmask)
     if tvec:
         time = np.arange(gpsStart, gpsEnd, ts)
     else:
-        meta = {}
-        meta['start'] = gpsStart
-        meta['stop']  = gpsEnd
-        meta['dt']    = ts
-
+        meta = {'start': gpsStart, 'stop': gpsEnd, 'dt': ts}
     #-- Create 1 Hz DQ channel for each DQ and INJ channel
     channel_dict = {}  #-- 1 Hz, mask
     slice_dict   = {}  #-- sampling freq. of stain, a list of slices
@@ -300,16 +292,16 @@ def loaddata(filename, ifo=None, tvec=True, readstrain=True, strain_chan=None, d
         bit = shortnameList.index(flag)
         # Special check for python 3
         if isinstance(flag, bytes): flag = flag.decode("utf-8") 
-        
+
         channel_dict[flag] = (qmask >> bit) & 1
 
     for flag in injnameList:
         bit = injnameList.index(flag)
         # Special check for python 3
         if isinstance(flag, bytes): flag = flag.decode("utf-8") 
-        
+
         channel_dict[flag] = (injmask >> bit) & 1
-       
+
     #-- Calculate the DEFAULT channel
     try:
         channel_dict['DEFAULT'] = ( channel_dict['DATA'] )
@@ -384,10 +376,7 @@ def dq_channel_to_seglist(channel, fs=4096):
 
     # -- group the segment boundaries two by two
     segments = boundaries.reshape( ( len(boundaries) // 2, 2 ) ) #// for python 3
-    # -- Account for sampling frequency and return a slice
-    segment_list = [slice(start*fs, stop*fs) for (start,stop) in segments]
-    
-    return segment_list
+    return [slice(start*fs, stop*fs) for (start,stop) in segments]
 
 
 class FileList():
@@ -426,24 +415,21 @@ class FileList():
         return frameList + hdfList
 
     def writecache(self, cacheName):
-        outfile = open(cacheName, 'w')
-        for file in self.list:
-            outfile.write(file + '\n')
-        outfile.close()
+        with open(cacheName, 'w') as outfile:
+            for file in self.list:
+                outfile.write(file + '\n')
 
     def readcache(self):
-        infile = open(self.cache, 'r')
-        self.list = infile.read().split()
-        infile.close()
+        with open(self.cache, 'r') as infile:
+            self.list = infile.read().split()
 
     def findfile(self, gps, ifo):
         start_gps = gps - (gps % 4096)
         filenamelist = fnmatch.filter(self.list, '*' + '-' + ifo + '*' + '-' + str(start_gps) + '-' + '*')
-        if len(filenamelist) == 0:
-            print(("WARNING!  No file found for GPS {0} and IFO {1}".format(gps, ifo)))
-            return None
-        else:
+        if len(filenamelist) != 0:
             return filenamelist[0]
+        print(("WARNING!  No file found for GPS {0} and IFO {1}".format(gps, ifo)))
+        return None
 
 
 def getstrain(start, stop, ifo, filelist=None, strain_chan=None, dq_chan=None, inj_chan=None):
@@ -470,9 +456,7 @@ def getstrain(start, stop, ifo, filelist=None, strain_chan=None, dq_chan=None, i
     # -- Check if this is a science segment
     segList = getsegs(start, stop, ifo, flag='DATA', filelist=filelist, strain_chan=strain_chan, dq_chan=dq_chan, inj_chan=inj_chan)
     sl = segList.seglist
-    if (sl[0][0] == start) and (sl[0][1] == stop):
-        pass
-    else:
+    if sl[0][0] != start or sl[0][1] != stop:
         raise TypeError("""Error in getstrain.
         Requested times include times where the data file was not found
         or instrument not in SCIENCE mode.
@@ -572,7 +556,7 @@ def getsegs(start, stop, ifo, flag='DATA', filelist=None, strain_chan=None, dq_c
     first = start - (start % 4096)
     gpsList = np.arange(first, stop, 4096)
     m_dq     = None
-    
+
     # -- Initialize segment list
     segList = []
 
@@ -601,20 +585,20 @@ def getsegs(start, stop, ifo, flag='DATA', filelist=None, strain_chan=None, dq_c
         indxlist = dq_channel_to_seglist(chan, fs=1.0)
         i_start = meta['start']
         i_seglist = [(indx.start+i_start, indx.stop+i_start) for indx in indxlist]
-        i_seglist = [(int(begin), int(end)) for begin, end in i_seglist] 
-        segList = segList + i_seglist
-      
+        i_seglist = [(int(begin), int(end)) for begin, end in i_seglist]
+        segList += i_seglist
+
     # -- Sort segments
     segList.sort()
-    
+
     # -- Merge overlapping segments
-    for i in range(0, len(segList)-1):
+    for i in range(len(segList)-1):
         seg1 = segList[i]
         seg2 = segList[i+1]
-    
+
         if seg1[1] == seg2[0]:
             segList[i]   = None
-            segList[i+1] = (seg1[0], seg2[1])            
+            segList[i+1] = (seg1[0], seg2[1])
     # -- Remove placeholder segments
     segList = [seg for seg in segList if seg is not None]
 

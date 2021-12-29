@@ -17,8 +17,9 @@ param2 = dict(
 
 @pytest.fixture
 def init_source():
-    source = Source(base='bilby', conversion='BBH', sampling_frequency=2048, duration=4)
-    return source
+    return Source(
+        base='bilby', conversion='BBH', sampling_frequency=2048, duration=4
+    )
 
 
 def test_property(init_source):

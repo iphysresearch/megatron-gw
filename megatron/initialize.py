@@ -120,14 +120,18 @@ def _compile_dependencies():
     custom_kernel_constraint = seq_len > 16 and seq_len <=2048 and \
         seq_len % 4 == 0 and attn_batch_size % 4 == 0
     # Print a warning.
-    if not ((args.fp16 or args.bf16) and
-            custom_kernel_constraint and
-            args.masked_softmax_fusion):
-        if args.rank == 0:
-            print('WARNING: constraints for invoking optimized'
-                  ' fused softmax kernel are not met. We default'
-                  ' back to unfused kernel invocations.', flush=True)
-    
+    if (
+        not (
+            (args.fp16 or args.bf16)
+            and custom_kernel_constraint
+            and args.masked_softmax_fusion
+        )
+        and args.rank == 0
+    ):
+        print('WARNING: constraints for invoking optimized'
+              ' fused softmax kernel are not met. We default'
+              ' back to unfused kernel invocations.', flush=True)
+
     # Always build on rank zero first.
     if torch.distributed.get_rank() == 0:
         start_time = time.time()
@@ -213,16 +217,15 @@ def _init_autoresume():
 
 def _set_random_seed(seed_):
     """Set random seed for reproducability."""
-    if seed_ is not None and seed_ > 0:
-        # Ensure that different pipeline MP stages get different seeds.
-        seed = seed_ + (100 * mpu.get_pipeline_model_parallel_rank())
-        random.seed(seed)
-        np.random.seed(seed)
-        torch.manual_seed(seed)
-        if torch.cuda.device_count() > 0:
-            mpu.model_parallel_cuda_manual_seed(seed)
-    else:
+    if seed_ is None or seed_ <= 0:
         raise ValueError('Seed ({}) should be a positive integer.'.format(seed))
+    # Ensure that different pipeline MP stages get different seeds.
+    seed = seed_ + (100 * mpu.get_pipeline_model_parallel_rank())
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    if torch.cuda.device_count() > 0:
+        mpu.model_parallel_cuda_manual_seed(seed)
 
 
 def write_args_to_tensorboard():

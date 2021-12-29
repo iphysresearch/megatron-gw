@@ -79,7 +79,7 @@ def main():
     c = reshape_waveform(c)
     p = load_dir(path1,type='par')
     #print(d.shape,p.shape)
-    
+
     utils = Data_utils(sampling_rate=sampling_frequency,time_duration=time_range[1]-time_range[0])
 
     range_index = [int(sampling_frequency*time_range[0]),int(sampling_frequency*time_range[1])] 
@@ -93,7 +93,7 @@ def main():
         if Overlaps[i] < 0.95:
             print('index: {}'.format(i))
             print('Overlap: {}'.format(Overlaps[i]))
-            
+
     #print(Overlaps)
     #plt.hist(Overlaps,bins='auto')
     #plt.show()
@@ -102,18 +102,6 @@ def main():
 
 
     return 0
-    plt.plot(np.linspace(plot_range[0], plot_range[1],num=int(sampling_frequency*(plot_range[1]-plot_range[0]))),
-                         clean_all1[int(plot_range[0]*sampling_frequency):int(plot_range[1]*sampling_frequency)], 
-                         color='g')  
-
-    plt.plot(np.linspace(plot_range[0], plot_range[1],num=int(sampling_frequency*(plot_range[1]-plot_range[0]))),
-                         denoised_all1[int(plot_range[0]*sampling_frequency):int(plot_range[1]*sampling_frequency)], 
-                         color='r')
-
-    plt.xlabel('time [sec]')
-    plt.legend(['denoised1', 'clean1','denoised2', 'clean2'])
-    plt.show()
-    print('done.')
 
 if __name__ == '__main__':
     main()

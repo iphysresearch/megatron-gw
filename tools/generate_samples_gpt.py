@@ -37,10 +37,8 @@ def model_provider(pre_process=True, post_process=True):
     """Build the model."""
 
     print_rank_0('building GPT model ...')
-    model = GPTModel(num_tokentypes=0, parallel_output=False,
+    return GPTModel(num_tokentypes=0, parallel_output=False,
                      pre_process=pre_process, post_process=post_process)
-
-    return model
 
 
 def add_text_generate_args(parser):
@@ -99,10 +97,10 @@ def main():
     # Generate samples.
     if args.num_samples == 0:
         args.micro_batch_size = 1
-        if args.sample_input_file != None:
-            generate_samples_input_from_file(model)
-        else:
+        if args.sample_input_file is None:
             generate_samples_interactive(model)
+        else:
+            generate_samples_input_from_file(model)
     else:
         generate_and_write_samples_unconditional(model)
 
