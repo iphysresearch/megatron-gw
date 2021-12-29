@@ -488,10 +488,14 @@ def _build_train_valid_test_datasets(data_prefix, data_impl, splits_string,
                     seed=seed)
         return dataset
 
+    from megatron.data.redis_dataset import DatasetTorchRealEvent   
     train_dataset = build_dataset('train', data_prefix, host='192.168.202.149', port=1234)
+    # train_dataset = DatasetTorchRealEvent()
+    # train_dataset = None
+    # valid_dataset = None
     valid_dataset = build_dataset('valid', data_prefix, host='192.168.202.149', port=5153)
     # test_dataset = build_dataset('test', data_prefix)
-    from megatron.data.redis_dataset import DatasetTorchRealEvent
+    
     test_dataset = DatasetTorchRealEvent()
 
     return (train_dataset, valid_dataset, test_dataset)

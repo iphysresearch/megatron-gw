@@ -9,17 +9,17 @@ NODE_RANK=0
 WORLD_SIZE=$(($GPUS_PER_NODE*$NNODES))
 
 DATA_PATH=../bigdata/
-CHECKPOINT_PATH=rn+ss+sm+1.2b  #pretrain-bert
+CHECKPOINT_PATH=1.2b_softmask_verify  #pretrain-bert
 VOCAB_FILE=./bert_vocab_files/bert-base-uncased-vocab.txt
 
 DISTRIBUTED_ARGS="--nproc_per_node $GPUS_PER_NODE --nnodes $NNODES --node_rank $NODE_RANK --master_addr $MASTER_ADDR --master_port $MASTER_PORT"
 
-# export OMP_NUM_THREADS=1    # 12
+#export OMP_NUM_THREADS=12
 #export NCCL_DEBUG=INFO
 # CUDA_LAUNCH_BLOCKING=1 
-#export CUDA_VISIBLE_DEVICES=0,1,2,3
+#export CUDA_VISIBLE_DEVICES=1,2,3,4
 python -m torch.distributed.launch $DISTRIBUTED_ARGS \
-       pretrain_gw.py \
+       redis_test.py \
        --tensor-model-parallel-size 1 \
        --pipeline-model-parallel-size 1 \
        --num-layers 24 \
@@ -27,14 +27,13 @@ python -m torch.distributed.launch $DISTRIBUTED_ARGS \
        --num-attention-heads 32 \
        --micro-batch-size 4 \
        --global-batch-size 32 \
-       --segment-length 2048 \
        --seq-length 127 \
        --max-position-embeddings 127 \
-       --train-iters 200000 \
+       --segment-length 2048 \
+       --train-iters 20000 \
        --save $CHECKPOINT_PATH \
        --load $CHECKPOINT_PATH \
        --data-path $DATA_PATH \
-       --vocab-file $VOCAB_FILE \
        --data-impl mmap \
        --split 949,50,1 \
        --distributed-backend nccl \
@@ -46,11 +45,12 @@ python -m torch.distributed.launch $DISTRIBUTED_ARGS \
        --clip-grad 1.0 \
        --lr-warmup-fraction .002 \
        --log-interval 100 \
-       --save-interval 20000 \
-       --eval-interval 500 \
-       --eval-iters 1 \
-       --dataloader-type cyclic \
+       --save-interval 100000 \
+       --eval-interval 1000 \
+       --eval-iters 128 \
+       --dataloader-type single \
        --fp16 \
-       --bert-no-binary-head
+       --bert-no-binary-head \
+       --no-load-optim
 #       --global-batch-size 32 \
-#       --num-layers-per-virtual-pipeline-stage 3 \
+

@@ -19,10 +19,10 @@ import numpy as np
 import torch
 import h5py
 import os
-from megatron import (
-    mpu,
-    print_rank_0
-)
+# from megatron import (
+#     mpu,
+#     print_rank_0
+# )
 import sys
 import redis
 sys.path.append('GWToolkit/')
@@ -48,6 +48,31 @@ class RedisDataset(torch.utils.data.Dataset):
         self.data_keys = sorted(self.r.keys('data_*'))
         self.signal_keys = sorted(self.r.keys('signal_*'))
         self.params_keys = sorted(self.r.keys('params_*'))
+        self.mask_keys = sorted(self.r.keys('mask_*'))
+        self.seed_data_keys = sorted(self.r.keys('seed_data_*'))
+        self.seed_signal_keys = sorted(self.r.keys('seed_signal_*'))
+        self.seed_params_keys = sorted(self.r.keys('seed_params_*'))
+        self.seed_mask_keys = sorted(self.r.keys('seed_mask_*'))
+
+        # Set for patching tokens
+        self.sampling_frequency = 16384
+        self.duration = 8
+        patch_size = 0.125  # [sec]
+        overlap = 0.5     # [%]
+        self.patching = Patching_data(
+            patch_size=patch_size,
+            overlap=overlap,
+            sampling_frequency=self.sampling_frequency,
+            duration=self.duration,
+            verbose=False,
+        )
+        self.token_shape = self.patching.output_shape
+        self.patching_params = dict(patch_size=patch_size, overlap=overlap)
+
+        num_token, num_length = self.token_shape[-2:]
+        mid_index = int(num_length*overlap)
+        self.rebuild_forer = lambda tokened_data: np.concatenate([d[:mid_index] for d in tokened_data[:-1]] + [tokened_data[-1]])
+        self.rebuild_backer = lambda tokened_data: np.concatenate([tokened_data[0]] + [d[mid_index:] for d in tokened_data[1:]])
 
         # Params to store.
         self.name = name
@@ -55,7 +80,7 @@ class RedisDataset(torch.utils.data.Dataset):
 
     def __len__(self):
         assert len(self.data_keys) == len(self.signal_keys)
-        # return len(self.data_keys)*32 
+        #return len(self.data_keys)*32
         return len(self.data_keys)
 
     def __getitem__(self, idx):
@@ -73,20 +98,30 @@ class RedisDataset(torch.utils.data.Dataset):
         # print("param:{}".format(self.params_keys[idx]))
 
         # deep copy, in case of "The given NumPy array is not writeable"
-        noisy_input = np.copy(self.fromRedis(self.data_keys[idx]))  
+        if not self.fromRedis(self.seed_data_keys[idx]) == self.fromRedis(self.seed_signal_keys[idx]) == self.fromRedis(self.seed_params_keys[idx]) == self.fromRedis(self.seed_mask_keys[idx]):
+            idx = (idx + self.seed) % len(self.data_keys)
+            # print('============== ray is flushing dataset...........======================')
+
+        noisy_input = np.copy(self.fromRedis(self.data_keys[idx]))
         noisy_input = noisy_input.squeeze(0)
         clean_input = np.copy(self.fromRedis(self.signal_keys[idx]))
         clean_input = clean_input.squeeze(0)
         param_np = np.copy(self.fromRedis(self.params_keys[idx]))
         param_np = np.real(param_np)
-        
+        mask_np = np.copy(self.fromRedis(self.mask_keys[idx]))[0]  # (2,)
+        mask = np.zeros(self.duration * self.sampling_frequency)
+        mask[mask_np[0]: mask_np[1]] = 1.0
+        mask_input = (self.patching(mask[np.newaxis, ...])+0.2)/1.2
+        mask_input = mask_input.squeeze(0)
         train_sample = {
             'noisy_signal': noisy_input,
             'clean_signal': clean_input,
-            'params': param_np}
+            'mask': mask_input,
+            'params': param_np
+            }
 
         return train_sample
-    
+
     def fromRedis(self, name):
         """Retrieve Numpy array from Redis key 'n'"""
         # Retrieve and unpack the data
@@ -94,6 +129,25 @@ class RedisDataset(torch.utils.data.Dataset):
             return m.unpackb(self.r.get(name))
         except TypeError:
             print('No this value')
+
+    def metric(self, model_output, target_signal, mask, rebuild_on_forer=True):
+        assert model_output.shape == target_signal.shape == mask.shape == (1, 127, 2048)
+        # (1, 127, 2048) => (131072,)
+        model_output = self.rebuild_forer(model_output[0]) if rebuild_on_forer else self.rebuild_backer(model_output[0])
+        target_signal = self.rebuild_forer(target_signal[0]) if rebuild_on_forer else self.rebuild_backer(target_signal[0])
+        mask = self.rebuild_forer(mask[0]) if rebuild_on_forer else self.rebuild_backer(mask[0])
+        # (131072,) => (2,)
+        return (self.calc_matches(target_signal, model_output),
+                self.calc_matches(mask * target_signal, mask * model_output))
+
+    def calc_matches(self, d1, d2):
+        fft1 = np.fft.fft(d1)
+        fft2 = np.fft.fft(d2)
+        norm1 = np.mean(np.abs(fft1)**2)
+        norm2 = np.mean(np.abs(fft2)**2)
+        inner = np.mean(fft1.conj()*fft2).real
+        return inner / np.sqrt(norm1 * norm2)
+
 
 class DatasetTorchRealEvent(torch.utils.data.Dataset):
     """Waveform dataset using Redis
@@ -108,7 +162,7 @@ class DatasetTorchRealEvent(torch.utils.data.Dataset):
         input data"s shape: (1, 127, 2048)
         1
         >>> valid_dataset[0].shape
-        (1, 127, 2048)
+        (127, 2048)
         >>> match_long, match_short = valid_dataset.metric(Model_Pridict_Signal)
     """
 
@@ -162,29 +216,37 @@ class DatasetTorchRealEvent(torch.utils.data.Dataset):
         self.denoised_strain_valid = None
         self.from_real_event()
 
-        # (32 * 16384) => (1, 127, 2048) 
-        self.input_strain, self.dMin, self.dMax = self.strain_preprocessing(self.strain_valid)  
+        # (32 * 16384) => (1, 127, 2048)
+        self.input_strain, self.dMin, self.dMax, self.target_signal = self.strain_preprocessing(self.strain_valid)
 
+        # Mask
+        t = np.arange(self.start_time+self.duration_long//2-self.duration//2,
+                      self.start_time+self.duration_long//2-self.duration//2+self.duration, 1/self.sampling_frequency)
+        left = self.target_time - 0.4
+        right = self.target_time + 0.1
+        self.mask = self.patching((((t > left) & (t < right)) * 1.0)[np.newaxis, ...])
 
     def __len__(self):
         # print(f'input data"s shape: {self.input_strain.shape}')
         # return len(self.input_strain)
-        return 32
+        return 128
 
     def __getitem__(self, idx):
 
         noisy_input = self.input_strain[0]
-        clean_input = np.ones(noisy_input.shape, dtype=noisy_input.dtype)
+        clean_input = self.target_signal[0]
+        mask_input = (self.mask[0] + 0.2)/1.2
         param_np = np.ones((1, 19), dtype=noisy_input.dtype)
         train_sample = {
             'noisy_signal': noisy_input,
             'clean_signal': clean_input,
+            'mask': mask_input,
             'params': param_np}
 
         return train_sample
 
     def from_real_event(self):
-        # print('Fetching real event data...')
+        print('Fetching real event data...')
         # Return whiten and denoised strain for GW150914
 
         bp = filter_design.bandpass(50, 250, self.sampling_frequency)
@@ -212,17 +274,20 @@ class DatasetTorchRealEvent(torch.utils.data.Dataset):
         # [1, self.num_duration_long]
         strain_whitened = self.whiten(strain, self.sampling_frequency, ASDf, ASD)
         data, dMin, dMax = self.normfunc.transform_data(self.patching(self.cut_from_long(strain_whitened)[np.newaxis, ...]))
-        return data, dMin, dMax
+
+        signal_data = TimeSeries(strain_whitened, times=self.time_valid, channel='H1').filter(self.zpk, filtfilt=True)
+        signal = self.normfunc.transform_signalornoise(self.patching(self.cut_from_long(signal_data)[np.newaxis, ...]), dMin, dMax)
+        return data, dMin, dMax, signal
 
     def signal_postprocessing(self, signal):
         return self.normfunc.inverse_transform_signalornoise(signal, self.dMin, self.dMax)
 
-    def metric(self, output_signal, rebuild_on_forer=True):
+    def metric(self, output_whiten_signal, rebuild_on_forer=True):
         # (1, 127, 2048) => (131072,) => (2,)
-        output_whiten_signal = self.signal_postprocessing(output_signal)
+        # output_whiten_signal = self.signal_postprocessing(output_whiten_signal)
         output_whiten_signal = self.rebuild_forer(output_whiten_signal[0]) if rebuild_on_forer else self.rebuild_backer(output_whiten_signal[0])
-        return (self.calc_matches(self.cut_from_long(self.denoised_strain_valid) , output_whiten_signal),
-                self.calc_matches(self.cut_for_target(self.denoised_strain_valid), self.cut_for_target(output_whiten_signal)))
+        return (self.calc_matches(self.rebuild_forer(self.target_signal[0]), output_whiten_signal),
+                self.calc_matches(self.cut_for_target(self.rebuild_forer(self.target_signal[0])), self.cut_for_target(output_whiten_signal)))
 
     def cut_from_long(self, data):
         left_index = int((self.duration_long - self.duration)/2*self.sampling_frequency)
@@ -237,7 +302,7 @@ class DatasetTorchRealEvent(torch.utils.data.Dataset):
             pass
         else:
             raise
-        return data[(time > self.target_time - 0.1) & (time < self.target_time + 0.05)]
+        return data[(time > self.target_time - 0.4) & (time < self.target_time + 0.1)]
 
     def whiten(self, signal, sampling_rate, f_ASD=None, ASD=None, return_tilde=False, return_asd=False):
         """
@@ -264,5 +329,4 @@ class DatasetTorchRealEvent(torch.utils.data.Dataset):
         norm1 = np.mean(np.abs(fft1)**2)
         norm2 = np.mean(np.abs(fft2)**2)
         inner = np.mean(fft1.conj()*fft2).real
-        return inner / np.sqrt(norm1 * norm2)   
-
+        return inner / np.sqrt(norm1 * norm2)

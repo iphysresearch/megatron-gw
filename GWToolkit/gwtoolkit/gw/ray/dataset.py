@@ -45,6 +45,18 @@ class RayDataset():
     def __init__(self):
         """Instantiate a ...
         """
+        noise_interval=1024
+        num_length=2
+        data_dir='/workspace/zhaoty/dataset/O1_H1_All/'
+        selected_hdf_file_ratio=0.5
+        
+        ##### For raw LIGO data as noises  FIXME
+        noise_interval=32
+        num_length=1
+        data_dir='/workspace/zhaoty/dataset/GW150914_around/'
+        selected_hdf_file_ratio=1.0
+        ##### For raw LIGO data as noises
+
         # 1. Init for WaveformDataset
         self.sampling_frequency = 4096*4     # [Hz], sampling rate
         self.duration_long = 32            # [sec], duration of a sample
@@ -87,10 +99,10 @@ class RayDataset():
 
         ####################################################################################
         # Set for noises
-        self.data_dir = '/workspace/zhaoty/dataset/O1_H1_All/'
-        self.noise_interval = 1024
-        self.selected_hdf_file_ratio = 0.5
-        self.num_length = 2
+        self.data_dir = data_dir
+        self.noise_interval = noise_interval
+        self.selected_hdf_file_ratio = selected_hdf_file_ratio
+        self.num_length = num_length
 
         # Used for estimate PSDs
         self.seg_sec = 1
@@ -139,7 +151,12 @@ class RayDataset():
 
         # Init
         self.update_waveforms()
-        self.update_backgrounds(4)
+        while True:
+            try:
+                self.update_backgrounds(4)
+                break
+            except ValueError:
+                pass
 
     @property
     def target_optimal_snr(self):
@@ -202,9 +219,10 @@ class RayDataset():
         4: Reselect % of hdf5s -> Resample strains from selected hdf5s -> Restimate PSD by resegmenting -> Regenete BG from PSD
         3:                        Resample strains from selected hdf5s -> Restimate PSD by resegmenting -> Regenete BG from PSD
         2:                                                                Restimate PSD by resegmenting -> Regenete BG from PSD
-        1:                                                                                                 Regenete BG from PSD        
+        1:                                                                                                 Regenete BG from PSD
+        0: Use raw data from LIGO
         """
-        assert level in [1, 2, 3, 4], f'You should input `level` within [1, 2, 3, 4], but you input `level`={level}'
+        assert level in [1, 2, 3, 4, 0], f'You should input `level` within [1, 2, 3, 4, 0], but you input `level`={level}'
         level_list = [0]*(4-level)+[1]*level
         # Loop for noises
         for det in self.dets:
@@ -212,6 +230,9 @@ class RayDataset():
                 # Select % of hdf5 files (Randomly)
                 self.wfd.dets[det].load_from_GWOSC(self.data_dir, self.noise_interval, self.selected_hdf_file_ratio,
                                                    self.num_length, verbose=False)
+            if level == 0:
+                self.wfd.dets[det].gwosc.update_strain()  # Don't know why it works....
+                return
 
             if level_list[1]:
                 # Sampling strain_multi and time_multi (Randomly)

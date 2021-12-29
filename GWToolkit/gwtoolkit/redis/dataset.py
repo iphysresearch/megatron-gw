@@ -32,7 +32,24 @@ class DatasetTorchRedis(torch.utils.data.Dataset):
         self.data_keys = sorted(self.r.keys('data_*'))
         self.signal_keys = sorted(self.r.keys('signal_*'))
         self.params_keys = sorted(self.r.keys('params_*'))
+        self.mask_keys = sorted(self.r.keys('mask_*'))
+        self.seed_data_keys = sorted(self.r.keys('seed_data_*'))
+        self.seed_signal_keys = sorted(self.r.keys('seed_signal_*'))
+        self.seed_params_keys = sorted(self.r.keys('seed_params_*'))
+        self.seed_mask_keys = sorted(self.r.keys('seed_mask_*'))
 
+        # Set for patching tokens
+        self.sampling_frequency = 16384
+        self.duration = 8
+        patch_size = 0.125  # [sec]
+        overlap = 0.5     # [%]
+        self.patching = Patching_data(
+            patch_size=patch_size,
+            overlap=overlap,
+            sampling_frequency=self.sampling_frequency,
+            duration=self.duration,
+            verbose=False,
+        )
     def __len__(self):
         assert len(self.data_keys) == len(self.signal_keys)
         return len(self.data_keys)
@@ -41,9 +58,29 @@ class DatasetTorchRedis(torch.utils.data.Dataset):
         # if torch.is_tensor(idx):
         #     idx = idx.tolist()
 
-        return (self.fromRedis(self.data_keys[idx]),
-                self.fromRedis(self.signal_keys[idx]),
-                self.fromRedis(self.params_keys[idx]))
+        # deep copy, in case of "The given NumPy array is not writeable"
+        if not self.fromRedis(self.seed_data_keys[idx]) == self.fromRedis(self.seed_signal_keys[idx]) == self.fromRedis(self.seed_params_keys[idx]) == self.fromRedis(self.seed_mask_keys[idx]):
+            idx = (idx + self.seed) % len(self.data_keys)
+            # print('============== ray is flushing dataset...........======================')
+
+        noisy_input = np.copy(self.fromRedis(self.data_keys[idx]))
+        noisy_input = noisy_input.squeeze(0)
+        clean_input = np.copy(self.fromRedis(self.signal_keys[idx]))
+        clean_input = clean_input.squeeze(0)
+        param_np = np.copy(self.fromRedis(self.params_keys[idx]))
+        param_np = np.real(param_np)
+        mask_np = np.copy(self.fromRedis(self.mask_keys[idx]))[0]  # (2,)
+        mask = np.zeros(self.duration * self.sampling_frequency)
+        mask[mask_np[0]: mask_np[1]] = 1
+
+        train_sample = {
+            'noisy_signal': noisy_input,
+            'clean_signal': clean_input,
+            'mask': self.patching(mask[np.newaxis, ...]),
+            'params': param_np
+            }
+
+        return train_sample
 
     def fromRedis(self, name):
         """Retrieve Numpy array from Redis key 'n'"""
@@ -121,9 +158,8 @@ class DatasetTorchRealEvent(torch.utils.data.Dataset):
         self.denoised_strain_valid = None
         self.from_real_event()
 
-        # (32 * 16384) => (1, 127, 2048) 
-        self.input_strain, self.dMin, self.dMax = self.strain_preprocessing(self.strain_valid)  
-
+        # (32 * 16384) => (1, 127, 2048)
+        self.input_strain, self.dMin, self.dMax, self.target_signal = self.strain_preprocessing(self.strain_valid)
 
     def __len__(self):
         print(f'input data"s shape: {self.input_strain.shape}')
@@ -133,7 +169,7 @@ class DatasetTorchRealEvent(torch.utils.data.Dataset):
         if torch.is_tensor(idx):
             idx = idx.tolist()
 
-        return self.input_strain[idx]
+        return self.input_strain[idx], self.target_signal[idx]
 
     def from_real_event(self):
         print('Fetching real event data...')
@@ -164,7 +200,10 @@ class DatasetTorchRealEvent(torch.utils.data.Dataset):
         # [1, self.num_duration_long]
         strain_whitened = self.whiten(strain, self.sampling_frequency, ASDf, ASD)
         data, dMin, dMax = self.normfunc.transform_data(self.patching(self.cut_from_long(strain_whitened)[np.newaxis, ...]))
-        return data, dMin, dMax
+
+        signal_data = TimeSeries(strain_whitened, times=self.time_valid, channel='H1').filter(self.zpk, filtfilt=True)
+        signal = self.normfunc.transform_signalornoise(self.patching(self.cut_from_long(signal_data)[np.newaxis, ...]), dMin, dMax)
+        return data, dMin, dMax, signal
 
     def signal_postprocessing(self, signal):
         return self.normfunc.inverse_transform_signalornoise(signal, self.dMin, self.dMax)

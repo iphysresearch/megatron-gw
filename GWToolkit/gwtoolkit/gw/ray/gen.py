@@ -2,6 +2,7 @@ import sys
 sys.path.append('/workspace/zhouy/megatron-gw/GWToolkit/')
 from gwtoolkit.gw.ray import RayDatasetTorch, RayDataset, ray
 from gwtoolkit.redis.utils import toRedis, is_exist_Redis
+from gwtoolkit.redis import DatasetTorchRealEvent
 
 from torch.utils.data import DataLoader
 from tqdm import tqdm
@@ -21,7 +22,7 @@ def update_level(i):
     # np.array([update_level(i) for i in range(1000)])
 
 
-batch_size = 1
+batch_size = 32
 num_dataset = 32 if batch_size >= 32 else batch_size
 num_range = batch_size//num_dataset
 num_repeat = 4
@@ -36,6 +37,10 @@ end = 6_0000
 start = 6_0000
 end = 10_0000
 
+d = DatasetTorchRealEvent()
+t = np.arange(d.start_time+d.duration_long//2-d.duration//2,
+              d.start_time+d.duration_long//2-d.duration//2+d.duration, 1/d.sampling_frequency)
+
 def temp(index):
     for i, _ in enumerate(range(num_repeat)):
         if is_exist_Redis(f'data_{index}_{i}'):
@@ -49,23 +54,27 @@ for index in tqdm(range(start//num_repeat, end//num_repeat)):
     if temp(index):
         continue
     level = update_level(index)
-    pipeline = datasets.pipeline.remote(num_range, num_rep4eat, batch_size, level=level)
+    pipeline = datasets.pipeline.remote(num_range, num_repeat, batch_size, level=level)
     iteration = iter(ray.get(pipeline))
     for i, _ in enumerate(range(num_repeat)):
         if is_exist_Redis(f'data_{index}_{i}'):
             continue
-        
-        seed = np.random.rand()
 
         (data, signal, params) = next(iteration)
-        toRedis(data, f'data_{index}_{i}')
-        toRedis(seed, f'seed_data_{index}_{i}')
+        for j in range(batch_size):
+            seed = np.random.rand()
+            toRedis(data[j:j+1], f'data_{index}_{j}_{i}')
+            toRedis(seed, f'seed_data_{index}_{j}_{i}')
 
-        toRedis(signal, f'signal_{index}_{i}')
-        toRedis(seed, f'seed_signal_{index}_{i}')
+            toRedis(signal[j:j+1], f'signal_{index}_{j}_{i}')
+            toRedis(seed, f'seed_signal_{index}_{j}_{i}')
 
-        toRedis(params, f'params_{index}_{i}')
-        toRedis(seed, f'seed_params_{index}_{i}')
-        
+            toRedis(params[j:j+1], f'params_{index}_{j}_{i}')
+            toRedis(seed, f'seed_params_{index}_{j}_{i}')
+
+            left = np.real(params[j, -5]) - 0.4
+            right = np.real(params[j, -5]) + 0.1
+            toRedis(np.array([[np.argmax(t > left), np.argmin(t < right)]], dtype=np.int16), f'mask_{index}_{j}_{i}')
+            toRedis(seed, f'seed_mask_{index}_{j}_{i}')            
 
 ray.shutdown()

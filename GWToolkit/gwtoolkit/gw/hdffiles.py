@@ -202,7 +202,7 @@ class NoiseTimeline:
                  selected_hdf_file_ratio=None,
                  verbose=False):
 
-        self.GWTC1_events = pickle_read('/workspace/zhaoty/GWToolkit/gwtoolkit/gw/metadata/GWTC1_events.pkl')
+        self.GWTC1_events = pickle_read('/workspace/zhouy/megatron-gw/GWToolkit/gwtoolkit/gw/metadata/GWTC1_events.pkl')
 
         # Print debug messages or not?
         self.verbose = verbose

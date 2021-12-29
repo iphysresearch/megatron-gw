@@ -152,12 +152,12 @@ def pretrain(train_valid_test_dataset_provider,
     if args.save and iteration != 0:
         save_checkpoint(iteration, model, optimizer, lr_scheduler)
 
-    # if args.do_test:
-    #     # Run on test data.
-    #     prefix = 'the end of training for test data'
-    #     evaluate_and_print_results(prefix, forward_step_func,
-    #                                test_data_iterator, model,
-    #                                0, True)
+    if args.do_test:
+        # Run on test data.
+        prefix = 'iteration {}'.format(iteration)
+        test_and_print_results(prefix, forward_step_func,
+                                       test_data_iterator, model,
+                                       iteration, False)
 
 def update_train_iters(args):
 
@@ -799,8 +799,10 @@ def evaluate_and_print_results(prefix, forward_step_func,
     print_rank_last(string)
     # print_rank_last('-' * length)
 
-from megatron.data.redis_dataset import DatasetTorchRealEvent
+import numpy as np
+from megatron.data.redis_dataset import DatasetTorchRealEvent, RedisDataset
 test_dataset = DatasetTorchRealEvent()
+# test_dataset = RedisDataset('test', 'nouse', host='192.168.202.149', port=5153)
 def test_and_print_results(prefix, forward_step_func,
                                data_iterator, model,
                                iteration, verbose=False):
@@ -818,9 +820,9 @@ def test_and_print_results(prefix, forward_step_func,
                 timers=None, forward_only=True, test_only=True)
 
     predict = output[0][0].unsqueeze(0).cpu()
-    # print("predict.shape:{}".format(predict.shape))
+    #np.save('./realtest/iteration_{}_pretrain_345m_nomask.npy'.format(prefix.split()[-1]), predict.numpy())
     match_long, match_short = test_dataset.metric(predict)
-    # print("match_long, match_short:{}, {}".format(match_long, match_short))
+
     string = ' at {}, match long value: {} | match short value: {} '.format(prefix, match_long, match_short)
     length = len(string) + 1
     # print_rank_last('-' * length)

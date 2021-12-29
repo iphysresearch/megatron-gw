@@ -61,7 +61,7 @@ def get_batch(data_iterator):
     # keys = ['text', 'types', 'labels', 'is_random', 'loss_mask', 'padding_mask']
     # datatype = torch.int64
 
-    keys = ['noisy_signal', 'clean_signal', 'params']
+    keys = ['noisy_signal', 'clean_signal', 'mask', 'params']
     datatype = torch.float64
 
     # Broadcast data.
@@ -74,9 +74,10 @@ def get_batch(data_iterator):
     # Unpack.
     noisy_signal = data_b['noisy_signal'] #.long()
     clean_signal = data_b['clean_signal'] #.long()
+    loss_mask = data_b['mask'] #.long()
     params = data_b['params'] #.long()
 
-    return noisy_signal, clean_signal, params
+    return noisy_signal, clean_signal, loss_mask, params
 
 
 # def loss_func(loss_mask, sentence_order, output_tensor):
@@ -88,7 +89,8 @@ def loss_func(loss_mask, sentence_order, clean_signal, output_tensor):
     #loss_fn = torch.nn.L1Loss()
     #lm_loss = loss_fn(denoised_signal, clean_signal)
     loss_fn = torch.nn.MSELoss()
-    lm_loss = loss_fn(denoised_signal.to(torch.float32), clean_signal.to(torch.float32))
+    #lm_loss = loss_fn(denoised_signal.to(torch.float32), clean_signal.to(torch.float32))
+    lm_loss = loss_fn(denoised_signal.to(torch.float32) * loss_mask.to(torch.float32), clean_signal.to(torch.float32) * loss_mask.to(torch.float32))
 
     loss = lm_loss
     averaged_losses = average_losses_across_data_parallel_group(
@@ -127,7 +129,8 @@ def forward_step(data_iterator, model):
 
     # Get the batch.
     timers('batch-generator').start()
-    noisy_signal, clean_signal, params = get_batch(data_iterator)
+    # noisy_signal, clean_signal, params = get_batch(data_iterator)
+    noisy_signal, clean_signal, loss_mask, params = get_batch(data_iterator)
 
     # noisy_data and clean signal
     # loss_mask and sentence_order is used to calculate loss
@@ -135,7 +138,7 @@ def forward_step(data_iterator, model):
     lm_labels = torch.ones(noisy_signal.shape[:2],device=noisy_signal.device) * -1
     types = torch.zeros(noisy_signal.shape[:2],device=noisy_signal.device)
     sentence_order = torch.zeros(noisy_signal.shape[0],device=noisy_signal.device)  # does not contribute to loss at demo stage
-    loss_mask = torch.ones(noisy_signal.shape,device=noisy_signal.device)
+    # loss_mask = torch.ones(noisy_signal.shape,device=noisy_signal.device)
 
     timers('batch-generator').stop()
 
@@ -146,7 +149,18 @@ def forward_step(data_iterator, model):
     output_tensor = model(noisy_signal, padding_mask, tokentype_ids=types,
                           lm_labels=lm_labels)
 
+    # if torch.distributed.get_rank() == 0:
+    #     import numpy as np
+    #     np.save('./realtest/noisy_signal_input.npy', noisy_signal.cpu().numpy())
+    #     np.save('./realtest/noisy_signal_float16.npy', noisy_signal.to(args.params_dtype).cpu().numpy())
+    #     np.save('./realtest/clean_signal_label.npy', clean_signal.cpu().numpy())
+    #     np.save('./realtest/clean_signal_float32.npy', clean_signal.to(torch.float32).cpu().numpy())
+    #     np.save('./realtest/denoised_signal_output.npy', output_tensor[0].detach().cpu().numpy())
+    #     np.save('./realtest/denoised_signal_float32.npy', output_tensor[0].to(torch.float32).detach().cpu().numpy())
+    #     np.save('./realtest/loss_mask.npy', loss_mask.to(torch.float32).cpu().numpy())
+
     # return output_tensor, partial(loss_func, loss_mask, sentence_order)
+    # print("loss mask shape:{}".format(loss_mask.shape))
     return output_tensor, partial(loss_func, loss_mask, sentence_order, clean_signal)
 
 

@@ -1,14 +1,25 @@
 import sys
 sys.path.append('/workspace/zhouy/megatron-gw/GWToolkit/')
 from gwtoolkit.gw.ray import RayDatasetTorch, RayDataset, ray
-from gwtoolkit.redis.utils import toRedis, is_exist_Redis
+from gwtoolkit.redis.utils import is_exist_Redis
 from gwtoolkit.redis import DatasetTorchRealEvent
 
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
 import numpy as np
+import msgpack_numpy as m
+m.patch()               # Important line to monkey-patch for numpy support!
 
+import redis
+
+connection_pool = redis.ConnectionPool(host='192.168.202.149', port=5153, db=0, decode_responses=False)
+r = redis.Redis(connection_pool=connection_pool)
+
+def toRedis(value,name):
+    """Store given Numpy array 'value' in Redis under key 'name'"""
+    r.set(name,m.packb(value))
+    return
 
 def update_level(i):
     return 0
@@ -29,8 +40,8 @@ num_range = batch_size//num_dataset
 num_repeat = 2
 
 datasets = RayDatasetTorch.remote(num_dataset=num_dataset)
-start = 3_0000 // num_repeat // batch_size
-end = 6_0000 // num_repeat // batch_size
+start = 0 // num_repeat // batch_size
+end = 1024 // num_repeat // batch_size
 
 d = DatasetTorchRealEvent()
 t = np.arange(d.start_time+d.duration_long//2-d.duration//2,
@@ -38,7 +49,7 @@ t = np.arange(d.start_time+d.duration_long//2-d.duration//2,
 
 # for index in tqdm(range(start//num_repeat, end//num_repeat)):
 index = start
-while True:
+while index<end: #True:
     try:
         level = update_level(index)
         pipeline = datasets.pipeline.remote(num_range, num_repeat, batch_size, level=level)
@@ -61,11 +72,11 @@ while True:
 
                 left = np.real(params[j, -5]) - 0.4
                 right = np.real(params[j, -5]) + 0.1
-                toRedis(np.array([[np.argmax(t > left), np.argmin(t < right)]], dtype=np.int32), f'mask_{index}_{j}_{i}')
+                toRedis(np.array([[np.argmax(t > left), np.argmin(t < right)]], dtype=np.int64), f'mask_{index}_{j}_{i}')
                 toRedis(seed, f'seed_mask_{index}_{j}_{i}')
         index += 1
-        if index == end - 1:
-            index = start
+        #if index == end - 1:
+        #    index = start
     except KeyboardInterrupt:
         break
 ray.shutdown()
