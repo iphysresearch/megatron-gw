@@ -821,9 +821,9 @@ def test_and_print_results(prefix, forward_step_func,
 
     predict = output[0][0].unsqueeze(0).cpu()
     #np.save('./realtest/iteration_{}_pretrain_345m_nomask.npy'.format(prefix.split()[-1]), predict.numpy())
-    match_long, match_short = test_dataset.metric(predict)
+    match_long, match_short, match_tmp1, match_tmp2 = test_dataset.metric(predict)
 
-    string = ' at {}, match long value: {} | match short value: {} '.format(prefix, match_long, match_short)
+    string = f' at {prefix}, match long value: {match_long} | match short value: {match_short} | match template1: {match_tmp1} | match template2 : {match_tmp2} '
     length = len(string) + 1
     # print_rank_last('-' * length)
     print_rank_last(string)
