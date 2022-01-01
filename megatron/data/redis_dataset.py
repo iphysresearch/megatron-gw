@@ -179,6 +179,9 @@ class DatasetTorchRealEvent(torch.utils.data.Dataset):
         buffer_time = self.duration_long / 2 - self.duration / 4
         self.start_time = self.target_time-(self.duration_long - buffer_time)
         self.geocent_time = (self.target_time-5.1, self.target_time+1.1)
+        self.time_array = np.arange(self.start_time+self.duration_long//2-self.duration//2,
+                                    self.start_time+self.duration_long//2-self.duration//2+self.duration,
+                                    1/self.sampling_frequency)
 
         self.data_dir = '/workspace/zhaoty/dataset/O1_H1_All/'
         self.addr_asds = [
