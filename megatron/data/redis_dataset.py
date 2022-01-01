@@ -78,6 +78,9 @@ class RedisDataset(torch.utils.data.Dataset):
         self.name = name
         self.seed = seed
 
+        # self.wf1, self.wf2
+        self.load_templates()
+
     def __len__(self):
         assert len(self.data_keys) == len(self.signal_keys)
         #return len(self.data_keys)*32
@@ -287,7 +290,10 @@ class DatasetTorchRealEvent(torch.utils.data.Dataset):
         # output_whiten_signal = self.signal_postprocessing(output_whiten_signal)
         output_whiten_signal = self.rebuild_forer(output_whiten_signal[0]) if rebuild_on_forer else self.rebuild_backer(output_whiten_signal[0])
         return (self.calc_matches(self.rebuild_forer(self.target_signal[0]), output_whiten_signal),
-                self.calc_matches(self.cut_for_target(self.rebuild_forer(self.target_signal[0])), self.cut_for_target(output_whiten_signal)))
+                self.calc_matches(self.cut_for_target(self.rebuild_forer(self.target_signal[0])), self.cut_for_target(output_whiten_signal)),
+                self.calc_matches(self.wf1, output_whiten_signal[::self.fs_factor][self.slic]),
+                self.calc_matches(self.wf2, output_whiten_signal[::self.fs_factor][self.slic]),
+                )
 
     def cut_from_long(self, data):
         left_index = int((self.duration_long - self.duration)/2*self.sampling_frequency)
@@ -322,6 +328,47 @@ class DatasetTorchRealEvent(torch.utils.data.Dataset):
             return irfft(signal_filtered_tilde), (f_signal, np.sqrt(psd))
         else:
             return irfft(signal_filtered_tilde)
+
+    def load_templates(self):
+        """['Time', 'whitened_ML', 'whitened_lower_bound_90', 'whitened_MAP', 'whitened_median',
+        'whitened_upper_bound_90', 'ML', 'lower_bound_90', 'MAP', 'median', 'upper_bound_90',
+        'amp_ratio', 'ML_freq']
+        """
+        import pandas as pd
+        wf_without_cal = '/workspace/zhouy/megatron-gw/GWToolkit/data/P1900164/'\
+                         'waveforms_without_calibration_factors/GW150914/IMRPhenomPv2/'\
+                         'without_cal/H1_summary_waveforms_samples.dat'
+        df = pd.read_csv(wf_without_cal, sep=' ', header=None)
+        # wf_with_cal = '/workspace/zhouy/megatron-gw/GWToolkit/data/P1900164/'\
+        # 'waveforms_with_calibration_factors/GW150914/IMRPhenomPv2/with_cal/H1_summary_waveforms_samples.dat'
+        # df = pd.read_csv(wf_without_cal, sep=' ', header=None)
+        columns = df.iloc[0, 1:]
+        df = df.drop(0).drop(13, axis=1)
+        df.columns = columns
+        for col in columns:
+            df[col] = df[col].map(lambda x: eval(x))
+
+        # Calc slic
+        fs = 1/(df['Time'].values[1] - df['Time'].values[0])  # 2048.0 Hz
+        self.fs_factor = int(self.sampling_frequency // fs)  # => 8
+        self.slic = (self.time_array[::self.fs_factor] >= df['Time'].values[0]) & (self.time_array[::self.fs_factor] <= df['Time'].values[-1]+1/fs)
+
+        # TODO need to support multi-detectors
+        if self.use_which_design_ASD_for_whiten is not None:
+            # # designed PSDs
+            data = np.loadtxt(self.addr_asds[2])
+            ASDf, ASD = data[:, 0], data[:, 1]
+        else:
+            # # current on-source PSDs
+            ASDf, ASD = None, None
+
+        # Calc wf1: whiten => norm
+        _, (fasd, asd) = self.whiten(self.strain_valid, self.sampling_frequency, ASDf, ASD, return_asd=True)
+        wf1 = self.whiten(df['ML'], fs, fasd, asd)
+        self.wf1 = self.normfunc.transform_signalornoise(wf1[np.newaxis, ...], self.dMin, self.dMax)[0, 0]
+        # Calc wf2: => norm
+        self.wf2 = self.normfunc.transform_signalornoise(df['whitened_MAP'][np.newaxis, ...], self.dMin, self.dMax)[0, 0]
+
 
     def calc_matches(self, d1, d2):
         fft1 = np.fft.fft(d1)
