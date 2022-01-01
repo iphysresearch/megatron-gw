@@ -170,6 +170,8 @@ class DatasetTorchRealEvent(torch.utils.data.Dataset):
     """
 
     def __init__(self, ):
+        self.minimum_frequency = 20.
+        self.maximum_frequency = 2048.
         self.sampling_frequency = 4096*4     # [Hz], sampling rate
         self.duration_long = 32            # [sec], duration of a sample
         self.duration = 8                  # [sec], duration of a sample
@@ -317,13 +319,15 @@ class DatasetTorchRealEvent(torch.utils.data.Dataset):
         """
         f_signal = rfftfreq(len(signal), 1./sampling_rate)
         if ASD is not None:
-            psd = np.abs(interp1d(f_ASD, ASD**2, bounds_error=False, fill_value=np.inf)(f_signal))
+            mask = ((f_ASD >= self.minimum_frequency) & (f_ASD <= self.maximum_frequency))
+            psd = np.abs(interp1d(f_ASD[mask], ASD[mask]**2, bounds_error=False, fill_value=np.inf)(f_signal))
         else:
             f_psd, psd = welch(signal, sampling_rate, nperseg=2**int(np.log2(len(signal)/8.0)), scaling='density')
-            psd = np.abs(interp1d(f_psd, psd, bounds_error=False, fill_value=np.inf)(f_signal))
+            mask = ((f_psd >= self.minimum_frequency) & (f_psd <= self.maximum_frequency))
+            psd = np.abs(interp1d(f_psd[mask], psd[mask], bounds_error=False, fill_value=np.inf)(f_signal))
         signal_filtered_tilde = rfft(signal) / np.sqrt(0.5 * sampling_rate * psd)
         if return_tilde:
-            return irfft(signal_filtered_tilde), signal_filtered_tilde
+            return irfft(signal_filtered_tilde), (f_signal, signal_filtered_tilde)
         elif return_asd:
             return irfft(signal_filtered_tilde), (f_signal, np.sqrt(psd))
         else:
